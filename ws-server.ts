@@ -5,6 +5,7 @@ import fs from "fs";
 const PORT = 8011;
 
 const wsPendingMap = new Map();
+const wsPendingMap2 = new Map();
 const roomMap = new Map();
 const roomMap2 = new Map();
 
@@ -53,6 +54,7 @@ wss.on("connection", (ws, request) => {
         return;
       }
       wsPendingMap.set(pairKey, ws);
+      wsPendingMap2.set(ws, pairKey);
       sendMsg(ws, 'PENDING_PAIR_SUCC');
       return;
     }
@@ -130,6 +132,11 @@ wss.on("connection", (ws, request) => {
       list = list.filter((item: any) => item != ws);
       roomMap.set(connectId, list);
       roomMap2.delete(ws);
+    }
+    const pairKey = wsPendingMap2.get(ws);
+    if (pairKey) {
+      wsPendingMap.delete(pairKey);
+      wsPendingMap2.delete(ws);
     }
   });
 });

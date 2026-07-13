@@ -269,9 +269,9 @@
 
     function initPairKey() {
         if (crypto.randomUUID) {
-            document.getElementById("pairKey").value = crypto.randomUUID().substr(2, 8);
+            document.getElementById("pairKey").value = crypto.randomUUID().substring(2, 8);
         } else {
-            document.getElementById("pairKey").value = Math.random().toString(16).substr(2, 8);
+            document.getElementById("pairKey").value = Math.random().toString(16).substring(2, 8);
         }
     }
 
