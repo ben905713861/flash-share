@@ -73,6 +73,7 @@ wss.on("connection", (ws, request) => {
       roomMap.set(connectedId, []);
       sendMsg(ws, 'PAIR_SUCC', { connectedId });
       sendMsg(targetWs, 'PAIR_SUCC', { connectedId });
+      wsPendingMap.delete(targetPairKey);
       return;
     }
     const { connectedId } = reqBody;
@@ -95,6 +96,7 @@ wss.on("connection", (ws, request) => {
       roomMap2.set(ws, connectedId);
       if (room.length <= 1) {
         sendMsg(ws, 'JOIN_ROOM_WAIT', { isOfferer: true });
+        return;
       }
       sendMsg(room[0], 'JOIN_ROOM_SUCC', { isOfferer: true });
       sendMsg(room[1], 'JOIN_ROOM_SUCC', { isOfferer: false });

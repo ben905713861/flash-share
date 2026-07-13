@@ -19,6 +19,7 @@
 
 <script>
     let peer, dataChannel, heartBeatChannel, ws;
+    let heartBeatInterval;
     const iceBuffer = [];
     let canAddIceCandidate = false;
     const WS_HOST = "/";
@@ -99,6 +100,7 @@
             ws.close();
         }
         ws = null;
+        clearInterval(heartBeatInterval);
 
         webrtcInit(wsInit);  // 重新 new RTCPeerConnection
     }
@@ -161,10 +163,10 @@
         if (peer.iceConnectionState !== "connected" || heartBeatChannel?.readyState !== "open") {
             return;
         }
-        const interval = setInterval(() => {
+        heartBeatInterval = setInterval(() => {
             if (lastSendTime != null && Date.now() - lastSendTime > 15000) {
                 console.log("peer dead, restart WebRTC");
-                clearInterval(interval);
+                clearInterval(heartBeatInterval);
                 restartPeerConnection();
                 return;
             }
@@ -173,7 +175,7 @@
     }
 
     function send() {
-        if (dataChannel.readyState !== "open") {
+        if (!dataChannel || dataChannel.readyState !== "open") {
             console.warn("dataChannel not open");
             return;
         }
