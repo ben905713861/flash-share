@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Data Channel Example</title>
+</head>
+<body>
+<h2>WebRTC Data Channel Example</h2>
+<div>
+    Pair Key <input id="pairKey" type="text" />
+    <br>
+    target Pair Key <input id="targetPairKey" type="text" />
+    <br>
+    <button id="initBtn" type="button" onclick="pair()">pair</button>
+    <br>
+    Content <textarea id="content"></textarea>
+    <br>
+    <button type="button" onclick="send()">send</button>
+</div>
+
+<script>
+    let peer, dataChannel, heartBeatChannel, ws;
+    const iceBuffer = [];
+    const WS_HOST = "/";
+
+    function pair() {
+        const targetPairKey = document.getElementById("targetPairKey").value;
+        if (targetPairKey === null || targetPairKey === '') {
+            alert('targetPairKey cannot be null');
+            return;
+        }
+        sendMsg('PAIR', { targetPairKey });
+    }
+
+    function webrtcInit(callback) {
+        console.log('webrtcInit');
+        peer = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" }
+            ]
+        });
+
+        peer.onicecandidate = event => {
+            if (event.candidate) {
+                sendMsg('ICE', event.candidate);
+            }
+        };
+
+        // answerer
+        peer.ondatachannel = e => {
+            if (e.channel.label === "chat") {
+                dataChannel = e.channel;
+                dataChannelInit();
+            } else if (e.channel.label === "heartbeat") {
+                heartBeatChannel = e.channel;
+                heartBeatChannelInit();
+            }
+        };
+
+        peer.oniceconnectionstatechange = () => {
+            console.log("iceConnectionState", peer.iceConnectionState);
+            if (peer.iceConnectionState === "connected") {
+                maybeStartHeartbeat();
+            } else if (peer.iceConnectionState === "disconnected") {
+                setTimeout(() => {
+                    if (peer.iceConnectionState !== "connected") {
+                        restartPeerConnection();
+                    }
+                }, 3000);
+            }
+            else if (peer.iceConnectionState === "failed") {
+                // 基本不可恢复，直接重建
+                restartPeerConnection();
+            }
+        };
+
+        callback && callback();
+    }
+    webrtcInit(wsInit);
+
+    function restartPeerConnection() {
+        console.log('restartPeerConnection');
+        dataChannel.close();
+        dataChannel = null;
+        heartBeatChannel.close();
+        heartBeatChannel = null;
+        peer.close();
+        peer = null;
+
+        webrtcInit(wsInit);  // 重新 new RTCPeerConnection
+    }
+
+    function dataChannelInit() {
+        dataChannel.onopen = () => {
+            console.log("datachannel open");
+        }
+        dataChannel.onmessage = event => {
+            console.log("dataChannel received: ", event.data);
+            document.getElementById("content").value = event.data;
+        };
+    }
+
+    let lastSendTime = null;
+    function heartBeatChannelInit() {
+        heartBeatChannel.onopen = () => {
+            console.log("heartBeatChannel open");
+            maybeStartHeartbeat();
+        }
+        heartBeatChannel.onmessage = e => {
+            console.log("heartBeatChannel received: ", e.data);
+            const msg = e.data;
+            if (msg.startsWith("ping:")) {
+                heartBeatChannel.send(msg.replace("ping:", "pong:"));
+            } else if (msg.startsWith("pong:")) {
+                lastSendTime = msg.split(":")[1];
+            }
+        }
+    }
+
+    // Create offer
+    function webrtcCreateOffer() {
+        console.log('webrtcCreateOffer');
+
+        // Data channel setup
+        dataChannel = peer.createDataChannel("chat");
+        dataChannelInit();
+
+        // heartbeat channel setup
+        heartBeatChannel = peer.createDataChannel("heartbeat");
+        heartBeatChannelInit();
+        peer.createOffer()
+            .then(offer => peer.setLocalDescription(offer))
+            .then(() => {
+                document.getElementById("initBtn").disabled = true;
+                sendMsg("SDP", peer.localDescription);
+            })
+            .catch(console.error);
+    }
+
+    function maybeStartHeartbeat() {
+        if (peer.iceConnectionState !== "connected" || heartBeatChannel?.readyState !== "open") {
+            return;
+        }
+        const interval = setInterval(() => {
+            if (lastSendTime != null && Date.now() - lastSendTime > 15000) {
+                console.log("peer dead, restart WebRTC");
+                clearInterval(interval);
+                restartPeerConnection();
+                return;
+            }
+            heartBeatChannel.send("ping:" + Date.now());
+        }, 5000);
+    }
+
+    function send() {
+        if (dataChannel.readyState !== "open") {
+            console.warn("dataChannel not open");
+            return;
+        }
+        const textContent = document.getElementById("content").value;
+        dataChannel.send(textContent);
+    }
+
+    function webRTCSwap(type, data) {
+        if (type === "PENDING_PAIR_SUCC") {
+            console.log("PENDING_PAIR_SUCC");
+        } else if (type === "PAIR_SUCC") {
+            console.log('pair success');
+            const { connectedId } = data;
+            localStorage.setItem('connectedId', connectedId);
+            sendMsg("JOIN_ROOM");
+        } else if (type === "PAIR_FAILED") {
+            console.log('pair failed');
+            clearConnHistory();
+        } else if (type === "JOIN_ROOM_WAIT") {
+            console.log("waiting for other clients to join the room");
+        } else if (type === "JOIN_ROOM_SUCC") {
+            const { isOfferer } = data;
+            console.log("joined room, isOfferer: ", isOfferer);
+            if (isOfferer) {
+                webrtcCreateOffer();
+            }
+        } else if (type === "SDP") {
+            console.log("SDP Received, create answer");
+            document.getElementById("initBtn").disabled = true;
+            peer.setRemoteDescription(new RTCSessionDescription(data))
+                .then(() => peer.createAnswer())
+                .then(answer => peer.setLocalDescription(answer))
+                .then(() => sendMsg("SDP_ANSWER", peer.localDescription))
+                .catch(console.error);
+        } else if (type === "SDP_ANSWER") {
+            console.log("SDP_ANSWER Received");
+            peer.setRemoteDescription(new RTCSessionDescription(data))
+        } else if (type === "ICE") {
+            console.log("ICE swap");
+            const candidate = new RTCIceCandidate(data);
+            if (!peer.remoteDescription) {
+                iceBuffer.push(candidate);  // todo
+            } else {
+                peer.addIceCandidate(candidate);
+            }
+        }
+    }
+
+    function wsInit() {
+        console.log("connect Ws");
+        ws = new WebSocket(WS_HOST);
+        ws.onopen = () => {
+            console.log("Connection opened");
+            const connectedId = localStorage.getItem('connectedId');
+            if (connectedId) {
+                sendMsg("JOIN_ROOM");
+            } else {
+                const pairKey = document.getElementById("pairKey").value;
+                if (pairKey) {
+                    sendMsg("PENDING_PAIR", { pairKey });
+                }
+            }
+
+        };
+        ws.onmessage = event => {
+            const { type, data } = JSON.parse(event.data);
+            console.log("Received message, type: ", type);
+            webRTCSwap(type, data);
+        }
+        ws.onerror = () => {
+            console.log("WebSocket error");
+            ws.close();
+        };
+        ws.onclose = event => {
+            console.log(`WebSocket closed, eventCode: ${event.code}, reason: ${event.reason}`);
+            setTimeout(wsInit, 5000);
+        }
+    }
+
+    function sendMsg(type, data) {
+        const connectedId = localStorage.getItem('connectedId');
+        ws.send(JSON.stringify({ type, data, connectedId }));
+    }
+
+    function initPairKey() {
+        if (crypto.randomUUID) {
+            document.getElementById("pairKey").value = crypto.randomUUID().substr(2, 8);
+        } else {
+            document.getElementById("pairKey").value = Math.random().toString(16).substr(2, 8);
+        }
+    }
+
+    function clearConnHistory() {
+        document.getElementById("targetPairKey").value = "";
+        localStorage.clear();
+        initPairKey();
+    }
+
+    (function () {
+        const connectedId = localStorage.getItem("connectedId");
+        if (!connectedId) {
+            initPairKey();
+            localStorage.clear();
+        }
+    })();
+</script>
+</body>
+</html>

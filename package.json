@@ -1,0 +1,20 @@
+{
+  "name": "flash-share",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebSocket echo server",
+  "main": "ws-server.js",
+  "scripts": {
+    "start": "node ws-server.js"
+  },
+  "dependencies": {
+    "url": "^0.11.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}
