@@ -94,6 +94,11 @@
         peer = null;
         canAddIceCandidate = false;
         iceBuffer.length = 0;
+        if (ws) {
+            ws.onclose = () => {};
+            ws.close();
+        }
+        ws = null;
 
         webrtcInit(wsInit);  // 重新 new RTCPeerConnection
     }
@@ -254,6 +259,9 @@
 
     function sendMsg(type, data) {
         const connectedId = localStorage.getItem('connectedId');
+        if (!data) {
+            data = {};
+        }
         ws.send(JSON.stringify({ type, data, connectedId }));
     }
 

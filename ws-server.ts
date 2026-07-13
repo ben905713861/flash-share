@@ -41,6 +41,10 @@ wss.on("connection", (ws, request) => {
       console.warn('type cannot be null');
       return;
     }
+    if (!data) {
+      console.warn('data cannot be null');
+      return;
+    }
     console.log("received type:", type);
     if (type === 'PENDING_PAIR') {
       const { pairKey } = data;
@@ -82,17 +86,18 @@ wss.on("connection", (ws, request) => {
         room = []
         roomMap.set(connectedId, room);
       }
+      if (room.length >= 2) {
+        console.warn("room is full")
+        sendMsg(ws, 'JOIN_ROOM_FAIL');
+        return;
+      }
       room.push(ws);
       roomMap2.set(ws, connectedId);
       if (room.length <= 1) {
         sendMsg(ws, 'JOIN_ROOM_WAIT', { isOfferer: true });
-      } else if (room.length == 2) {
-        sendMsg(room[0], 'JOIN_ROOM_SUCC', { isOfferer: true });
-        sendMsg(room[1], 'JOIN_ROOM_SUCC', { isOfferer: false });
-      } else {
-        console.warn("room is full")
-        sendMsg(ws, 'JOIN_ROOM_FAIL');
       }
+      sendMsg(room[0], 'JOIN_ROOM_SUCC', { isOfferer: true });
+      sendMsg(room[1], 'JOIN_ROOM_SUCC', { isOfferer: false });
       return;
     }
 
