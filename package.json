@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "WebSocket echo server",
-  "main": "ws-server.js",
+  "main": "ws-server.ts",
   "scripts": {
-    "start": "node ws-server.js"
+    "start": "tsx ws-server.ts"
   },
   "dependencies": {
     "url": "^0.11.4",

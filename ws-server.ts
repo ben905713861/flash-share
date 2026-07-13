@@ -29,29 +29,51 @@ wss.on("connection", (ws, request) => {
   console.log("Client connected");
 
   ws.on("message", (message) => {
-    const { connectedId, type, data } = JSON.parse(message.toString());
-    console.log("received type:", type, connectedId);
+    let reqBody;
+    try {
+      reqBody = JSON.parse(message.toString());
+    } catch (e) {
+      console.error("invalid request body", e);
+      return;
+    }
+    const { type, data } = reqBody;
+    if (!type) {
+      console.warn('type cannot be null');
+      return;
+    }
+    console.log("received type:", type);
     if (type === 'PENDING_PAIR') {
       const { pairKey } = data;
+      if (!pairKey) {
+        console.warn('pairKey is missing');
+        return;
+      }
       wsPendingMap.set(pairKey, ws);
       sendMsg(ws, 'PENDING_PAIR_SUCC');
       return;
     }
     if (type === 'PAIR') {
       const { targetPairKey } = data;
+      if (!targetPairKey) {
+        console.warn('target pairKey is missing');
+        return;
+      }
       const targetWs = wsPendingMap.get(targetPairKey);
       if (targetWs == null) {
         sendMsg(ws, 'PAIR_FAILED');
         return;
       }
       // generate connected ID
-      const connectedId = crypto.randomUUID() + crypto.randomUUID()
-
-      ;
+      const connectedId = crypto.randomUUID() + crypto.randomUUID();
       // create room
       roomMap.set(connectedId, []);
       sendMsg(ws, 'PAIR_SUCC', { connectedId });
       sendMsg(targetWs, 'PAIR_SUCC', { connectedId });
+      return;
+    }
+    const { connectedId } = reqBody;
+    if (!connectedId) {
+      console.warn('connectedId is missing');
       return;
     }
     if (type === 'JOIN_ROOM') {
@@ -64,11 +86,12 @@ wss.on("connection", (ws, request) => {
       roomMap2.set(ws, connectedId);
       if (room.length <= 1) {
         sendMsg(ws, 'JOIN_ROOM_WAIT', { isOfferer: true });
+      } else if (room.length == 2) {
+        sendMsg(room[0], 'JOIN_ROOM_SUCC', { isOfferer: true });
+        sendMsg(room[1], 'JOIN_ROOM_SUCC', { isOfferer: false });
       } else {
-        for (let i = 0; i < room.length; i++) {
-          const connectedWs = room[i];
-          sendMsg(connectedWs, 'JOIN_ROOM_SUCC', { isOfferer: i == 0 });
-        }
+        console.warn("room is full")
+        sendMsg(ws, 'JOIN_ROOM_FAIL');
       }
       return;
     }

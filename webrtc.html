@@ -20,6 +20,7 @@
 <script>
     let peer, dataChannel, heartBeatChannel, ws;
     const iceBuffer = [];
+    let canAddIceCandidate = false;
     const WS_HOST = "/";
 
     function pair() {
@@ -79,12 +80,20 @@
 
     function restartPeerConnection() {
         console.log('restartPeerConnection');
-        dataChannel.close();
+        if (dataChannel) {
+            dataChannel.close();
+        }
         dataChannel = null;
-        heartBeatChannel.close();
+        if (heartBeatChannel) {
+            heartBeatChannel.close();
+        }
         heartBeatChannel = null;
-        peer.close();
+        if (peer) {
+            peer.close();
+        }
         peer = null;
+        canAddIceCandidate = false;
+        iceBuffer.length = 0;
 
         webrtcInit(wsInit);  // 重新 new RTCPeerConnection
     }
@@ -136,6 +145,13 @@
             .catch(console.error);
     }
 
+    async function addBufferedIce() {
+        while (iceBuffer.length > 0) {
+            await peer.addIceCandidate(iceBuffer.shift());
+        }
+        canAddIceCandidate = true;
+    }
+
     function maybeStartHeartbeat() {
         if (peer.iceConnectionState !== "connected" || heartBeatChannel?.readyState !== "open") {
             return;
@@ -183,6 +199,7 @@
             console.log("SDP Received, create answer");
             document.getElementById("initBtn").disabled = true;
             peer.setRemoteDescription(new RTCSessionDescription(data))
+                .then(addBufferedIce)
                 .then(() => peer.createAnswer())
                 .then(answer => peer.setLocalDescription(answer))
                 .then(() => sendMsg("SDP_ANSWER", peer.localDescription))
@@ -190,13 +207,16 @@
         } else if (type === "SDP_ANSWER") {
             console.log("SDP_ANSWER Received");
             peer.setRemoteDescription(new RTCSessionDescription(data))
+                .then(addBufferedIce)
+                .catch(console.error);
         } else if (type === "ICE") {
             console.log("ICE swap");
             const candidate = new RTCIceCandidate(data);
-            if (!peer.remoteDescription) {
-                iceBuffer.push(candidate);  // todo
+            if (canAddIceCandidate) {
+                peer.addIceCandidate(candidate)
+                    .catch(console.error);
             } else {
-                peer.addIceCandidate(candidate);
+                iceBuffer.push(candidate);
             }
         }
     }
