@@ -19,6 +19,7 @@
 
 <script>
     let peer, dataChannel, heartBeatChannel, ws;
+    let lastPingAt;
     let heartBeatInterval;
     const iceBuffer = [];
     let canAddIceCandidate = false;
@@ -101,6 +102,8 @@
         }
         ws = null;
         clearInterval(heartBeatInterval);
+        heartBeatInterval = null;
+        lastPingAt = Date.now();
 
         webrtcInit(wsInit);  // 重新 new RTCPeerConnection
     }
@@ -115,7 +118,6 @@
         };
     }
 
-    let lastSendTime = null;
     function heartBeatChannelInit() {
         heartBeatChannel.onopen = () => {
             console.log("heartBeatChannel open");
@@ -127,7 +129,7 @@
             if (msg.startsWith("ping:")) {
                 heartBeatChannel.send(msg.replace("ping:", "pong:"));
             } else if (msg.startsWith("pong:")) {
-                lastSendTime = msg.split(":")[1];
+                lastPingAt = msg.split(":")[1];
             }
         }
     }
@@ -163,15 +165,19 @@
         if (peer.iceConnectionState !== "connected" || heartBeatChannel?.readyState !== "open") {
             return;
         }
-        heartBeatInterval = setInterval(() => {
-            if (lastSendTime != null && Date.now() - lastSendTime > 15000) {
-                console.log("peer dead, restart WebRTC");
-                clearInterval(heartBeatInterval);
-                restartPeerConnection();
-                return;
-            }
-            heartBeatChannel.send("ping:" + Date.now());
-        }, 5000);
+        if (!heartBeatInterval) {
+            lastPingAt = Date.now();
+            heartBeatInterval = setInterval(() => {
+                if (Date.now() - lastPingAt > 15000) {
+                    console.log("peer dead, restart WebRTC");
+                    clearInterval(heartBeatInterval);
+                    heartBeatInterval = null;
+                    restartPeerConnection();
+                    return;
+                }
+                heartBeatChannel.send("ping:" + Date.now());
+            }, 5000);
+        }
     }
 
     function send() {
