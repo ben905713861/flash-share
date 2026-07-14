@@ -243,12 +243,8 @@
             if (connectedId) {
                 sendMsg("JOIN_ROOM");
             } else {
-                const pairKey = document.getElementById("pairKey").value;
-                if (pairKey) {
-                    sendMsg("PENDING_PAIR", { pairKey });
-                }
+                registerPairKey();
             }
-
         };
         ws.onmessage = event => {
             const { type, data } = JSON.parse(event.data);
@@ -270,7 +266,9 @@
         if (!data) {
             data = {};
         }
-        ws.send(JSON.stringify({ type, data, connectedId }));
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type, data, connectedId }));
+        }
     }
 
     function initPairKey() {
@@ -281,10 +279,18 @@
         }
     }
 
+    function registerPairKey() {
+        const pairKey = document.getElementById("pairKey").value;
+        if (pairKey) {
+            sendMsg("PENDING_PAIR", { pairKey });
+        }
+    }
+
     function clearConnHistory() {
         document.getElementById("targetPairKey").value = "";
         localStorage.clear();
         initPairKey();
+        registerPairKey();
     }
 
     (function () {

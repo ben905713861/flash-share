@@ -53,6 +53,11 @@ wss.on("connection", (ws, request) => {
         console.warn('pairKey is missing');
         return;
       }
+      if (wsPendingMap2.has(ws)) {
+        // already registered, remove
+        const oldPairKey = wsPendingMap2.get(ws);
+        wsPendingMap.delete(oldPairKey);
+      }
       wsPendingMap.set(pairKey, ws);
       wsPendingMap2.set(ws, pairKey);
       sendMsg(ws, 'PENDING_PAIR_SUCC');
@@ -84,10 +89,19 @@ wss.on("connection", (ws, request) => {
       return;
     }
     if (type === 'JOIN_ROOM') {
+      if (roomMap2.has(ws)) {
+        console.warn("already joined room, exit")
+        sendMsg(ws, 'JOIN_ROOM_FAIL');
+        return;
+      }
       let room = roomMap.get(connectedId);
       if (room == null) {
         room = []
         roomMap.set(connectedId, room);
+      }
+      if (room.indexOf(ws) >= 0) {
+        console.log("room contains this ws");
+        return;
       }
       if (room.length >= 2) {
         console.warn("room is full")
@@ -130,7 +144,11 @@ wss.on("connection", (ws, request) => {
     if (connectId) {
       let list = roomMap.get(connectId);
       list = list.filter((item: any) => item != ws);
-      roomMap.set(connectId, list);
+      if (list.length == 0) {
+        roomMap.delete(connectId);
+      } else {
+        roomMap.set(connectId, list);
+      }
       roomMap2.delete(ws);
     }
     const pairKey = wsPendingMap2.get(ws);
