@@ -37,10 +37,13 @@ export class PairService {
             throw new Error('pairKey is not registered.');
         }
         if (pair.ws === ws) {
-            throw new Error('unable to pair with same ws');
+            throw new Error('unable to pair with same ws.');
         }
         this.#wsPendingMap.delete(pairKey);
         this.#wsPendingMap2.delete(pair.ws);
+        if (pair.ws.readyState !== WebSocket.OPEN) {
+            throw new Error('target ws is not opened.');
+        }
         return pair.ws;
     }
 

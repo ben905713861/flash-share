@@ -23,7 +23,7 @@
     let heartBeatInterval;
     const iceBuffer = [];
     let canAddIceCandidate = false;
-    const WS_HOST = "/";
+    const WS_HOST = "/ws";
 
     function pair() {
         const targetPairKey = document.getElementById("targetPairKey").value;
@@ -136,6 +136,9 @@
 
     // Create offer
     function webrtcCreateOffer() {
+        if (dataChannel && heartBeatChannel) {
+            return;
+        }
         console.log('webrtcCreateOffer');
 
         // Data channel setup
@@ -276,9 +279,9 @@
 
     function initPairKey() {
         if (crypto.randomUUID) {
-            document.getElementById("pairKey").value = crypto.randomUUID().substring(2, 8);
+            document.getElementById("pairKey").value = crypto.randomUUID();
         } else {
-            document.getElementById("pairKey").value = Math.random().toString(16).substring(2, 8);
+            document.getElementById("pairKey").value = Math.random().toString(16);
         }
     }
 

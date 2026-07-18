@@ -24,7 +24,7 @@ const server = https.createServer(options, (req, res) => {
 
 const pairService = new PairService();
 const roomService = new RoomService();
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws: WebSocket, request) => {
   console.log("Client connected");
 
@@ -73,8 +73,8 @@ wss.on("connection", (ws: WebSocket, request) => {
       try {
         const targetWs: WebSocket = pairService.pair(targetPairKey, ws);
         const roomKey = roomService.createRoom();
-        sendMsg(ws, 'PAIR_SUCC', { roomKey });
         sendMsg(targetWs, 'PAIR_SUCC', { roomKey });
+        sendMsg(ws, 'PAIR_SUCC', { roomKey });
       } catch (e) {
         console.error('register pairKey failed', e);
         sendMsg(ws, 'PAIR_FAIL');
@@ -139,9 +139,8 @@ wss.on('error', (error) => {
 });
 
 function sendMsg(ws: any, type: string, data?: any) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type, data }));
-  } else {
-    console.error('WebSocket is not open, cannot send message');
+  if (ws.readyState !== WebSocket.OPEN) {
+    throw new Error('WebSocket is not open, cannot send message');
   }
+  ws.send(JSON.stringify({ type, data }));
 }
