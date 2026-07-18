@@ -1,0 +1,73 @@
+import {WebSocket} from 'ws';
+
+export class PairService {
+
+    #wsPendingMap: Map<string, Pair> = new Map();
+    #wsPendingMap2: Map<WebSocket, Pair> = new Map();
+
+    constructor() {
+        setInterval(this.#clear, 60 * 1000);
+    }
+
+    register(pairKey: string, ws: WebSocket) {
+        let pair: Pair | undefined = this.#wsPendingMap.get(pairKey);
+        if (pair) {
+            if (pair.ws === ws) {
+                // scenario 1: ws uses same pair key to register multiple times
+                return;
+            } else {
+                // scenario 2: another ws uses an in-used pariKey to register
+                throw new Error('register failed, pairKey is already registered.');
+            }
+        }
+        pair = this.#wsPendingMap2.get(ws);
+        // scenario 3: same ws uses a new pairKey, clear and refresh
+        if (pair && pair.pairKey !== pairKey) {
+            this.#wsPendingMap.delete(pair.pairKey);
+        }
+        // scenario 4, diff key, diff ws.
+        pair = new Pair(pairKey, ws, new Date());
+        this.#wsPendingMap.set(pairKey, pair);
+        this.#wsPendingMap2.set(ws, pair);
+    }
+
+    pair(pairKey: string, ws: WebSocket): WebSocket {
+        const pair: Pair | undefined = this.#wsPendingMap.get(pairKey);
+        if (!pair) {
+            throw new Error('pairKey is not registered.');
+        }
+        if (pair.ws === ws) {
+            throw new Error('unable to pair with same ws');
+        }
+        this.#wsPendingMap.delete(pairKey);
+        this.#wsPendingMap2.delete(pair.ws);
+        return pair.ws;
+    }
+
+    unregister(ws: WebSocket) {
+        const pair: Pair | undefined = this.#wsPendingMap2.get(ws);
+        if (pair) {
+            this.#wsPendingMap2.delete(ws);
+            this.#wsPendingMap.delete(pair.pairKey);
+        }
+    }
+
+    #clear() {
+        this.#wsPendingMap.forEach((pair: Pair, pairKey: string) => {
+            if (Date.now() - pair.createTime.getTime() > 180 * 1000) {
+                this.#wsPendingMap2.delete(pair.ws);
+                this.#wsPendingMap.delete(pairKey);
+            }
+        });
+    }
+}
+
+class Pair {
+    constructor(public pairKey: string,
+                public ws: WebSocket,
+                public createTime: Date) {
+        this.pairKey = pairKey;
+        this.ws = ws;
+        this.createTime = createTime;
+    }
+}

@@ -1,13 +1,10 @@
-import {WebSocketServer} from 'ws';
+import {WebSocketServer, WebSocket} from 'ws';
 import https from "https";
 import fs from "fs";
+import RoomService from "./room-service";
+import {PairService} from "./pair-service";
 
 const PORT = 8011;
-
-const wsPendingMap = new Map();
-const wsPendingMap2 = new Map();
-const roomMap = new Map();
-const roomMap2 = new Map();
 
 const options = {
   key: fs.readFileSync("./cert/privkey.pem"),
@@ -25,8 +22,10 @@ const server = https.createServer(options, (req, res) => {
   }
 });
 
+const pairService = new PairService();
+const roomService = new RoomService();
 const wss = new WebSocketServer({ server });
-wss.on("connection", (ws, request) => {
+wss.on("connection", (ws: WebSocket, request) => {
   console.log("Client connected");
 
   ws.on("message", (message) => {
@@ -53,14 +52,12 @@ wss.on("connection", (ws, request) => {
         console.warn('pairKey is missing');
         return;
       }
-      if (wsPendingMap2.has(ws)) {
-        // already registered, remove
-        const oldPairKey = wsPendingMap2.get(ws);
-        wsPendingMap.delete(oldPairKey);
+      try {
+        pairService.register(pairKey, ws);
+        sendMsg(ws, 'PENDING_PAIR_SUCC');
+      } catch (e) {
+        console.error('register pairKey failed', e);
       }
-      wsPendingMap.set(pairKey, ws);
-      wsPendingMap2.set(ws, pairKey);
-      sendMsg(ws, 'PENDING_PAIR_SUCC');
       return;
     }
     if (type === 'PAIR') {
@@ -69,93 +66,53 @@ wss.on("connection", (ws, request) => {
         console.warn('target pairKey is missing');
         return;
       }
-      const targetWs = wsPendingMap.get(targetPairKey);
-      if (targetWs == null) {
-        sendMsg(ws, 'PAIR_FAILED');
-        return;
+      try {
+        const targetWs: WebSocket = pairService.pair(targetPairKey, ws);
+        const roomKey = roomService.createRoom();
+        sendMsg(ws, 'PAIR_SUCC', { roomKey });
+        sendMsg(targetWs, 'PAIR_SUCC', { roomKey });
+      } catch (e) {
+        console.error('register pairKey failed', e);
       }
-      // generate connected ID
-      const connectedId = crypto.randomUUID() + crypto.randomUUID();
-      // create room
-      roomMap.set(connectedId, []);
-      sendMsg(ws, 'PAIR_SUCC', { connectedId });
-      sendMsg(targetWs, 'PAIR_SUCC', { connectedId });
-      wsPendingMap.delete(targetPairKey);
-      return;
-    }
-    const { connectedId } = reqBody;
-    if (!connectedId) {
-      console.warn('connectedId is missing');
-      return;
-    }
-    if (type === 'JOIN_ROOM') {
-      if (roomMap2.has(ws)) {
-        console.warn("already joined room, exit")
-        sendMsg(ws, 'JOIN_ROOM_FAIL');
-        return;
-      }
-      let room = roomMap.get(connectedId);
-      if (room == null) {
-        room = []
-        roomMap.set(connectedId, room);
-      }
-      if (room.indexOf(ws) >= 0) {
-        console.log("room contains this ws");
-        return;
-      }
-      if (room.length >= 2) {
-        console.warn("room is full")
-        sendMsg(ws, 'JOIN_ROOM_FAIL');
-        return;
-      }
-      room.push(ws);
-      roomMap2.set(ws, connectedId);
-      if (room.length <= 1) {
-        sendMsg(ws, 'JOIN_ROOM_WAIT', { isOfferer: true });
-        return;
-      }
-      sendMsg(room[0], 'JOIN_ROOM_SUCC', { isOfferer: true });
-      sendMsg(room[1], 'JOIN_ROOM_SUCC', { isOfferer: false });
       return;
     }
 
-    const list: WebSocket[] = roomMap.get(connectedId);
-    if (list == null) {
-      console.error('cannot find target ws, connectedId: ', connectedId);
+    const { roomKey } = reqBody;
+    if (!roomKey) {
+      console.warn('roomKey is missing');
       return;
     }
-    const targetWsList: WebSocket[] = list.filter((item: any) => item !== ws);
-    if (targetWsList.length === 0) {
-      console.error("No connection found");
-      return;
-    }
-    targetWsList.forEach((targetWs: WebSocket) => {
-      if (targetWs.readyState !== WebSocket.OPEN) {
-        console.error(`Connection failed: ${targetWs.toString()}`);
-        return;
+    if (type === 'JOIN_ROOM') {
+      try {
+        roomService.joinRoom(roomKey, ws);
+        const roomWsList: WebSocket[] = roomService.getRoomWsList(roomKey);
+        for (let i = 0; i < roomWsList.length; i++) {
+          sendMsg(roomWsList[i], 'JOIN_ROOM_SUCC', { isOfferer: i == 0 });
+        }
+      } catch (e) {
+        console.error('join room error', e);
+        sendMsg(ws, 'JOIN_ROOM_FAIL');
       }
-      targetWs.send(message.toString());
-    })
+      return;
+    }
+    // other types
+    try {
+      const roomWsList: WebSocket[] = roomService.getRoomWsList(roomKey);
+      const targetWsList: WebSocket[] = roomWsList.filter((item: WebSocket) => item !== ws);
+      targetWsList.forEach((targetWs: WebSocket) => {
+        if (targetWs.readyState === WebSocket.OPEN) {
+          targetWs.send(message.toString());
+        }
+      })
+    } catch (e) {
+      console.error('exchange ws message error', e);
+    }
   });
 
   ws.on("close", () => {
     console.log("Client disconnected");
-    const connectId = roomMap2.get(ws);
-    if (connectId) {
-      let list = roomMap.get(connectId);
-      list = list.filter((item: any) => item != ws);
-      if (list.length == 0) {
-        roomMap.delete(connectId);
-      } else {
-        roomMap.set(connectId, list);
-      }
-      roomMap2.delete(ws);
-    }
-    const pairKey = wsPendingMap2.get(ws);
-    if (pairKey) {
-      wsPendingMap.delete(pairKey);
-      wsPendingMap2.delete(ws);
-    }
+    roomService.leaveRoom(ws);
+    pairService.unregister(ws);
   });
 });
 

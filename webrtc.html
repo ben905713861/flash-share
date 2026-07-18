@@ -194,8 +194,8 @@
             console.log("PENDING_PAIR_SUCC");
         } else if (type === "PAIR_SUCC") {
             console.log('pair success');
-            const { connectedId } = data;
-            localStorage.setItem('connectedId', connectedId);
+            const { roomKey } = data;
+            localStorage.setItem('roomKey', roomKey);
             sendMsg("JOIN_ROOM");
         } else if (type === "PAIR_FAILED") {
             console.log('pair failed');
@@ -239,8 +239,8 @@
         ws = new WebSocket(WS_HOST);
         ws.onopen = () => {
             console.log("Connection opened");
-            const connectedId = localStorage.getItem('connectedId');
-            if (connectedId) {
+            const roomKey = localStorage.getItem('roomKey');
+            if (roomKey) {
                 sendMsg("JOIN_ROOM");
             } else {
                 registerPairKey();
@@ -262,12 +262,12 @@
     }
 
     function sendMsg(type, data) {
-        const connectedId = localStorage.getItem('connectedId');
+        const roomKey = localStorage.getItem('roomKey');
         if (!data) {
             data = {};
         }
         if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type, data, connectedId }));
+            ws.send(JSON.stringify({ type, data, roomKey }));
         }
     }
 
@@ -294,8 +294,8 @@
     }
 
     (function () {
-        const connectedId = localStorage.getItem("connectedId");
-        if (!connectedId) {
+        const roomKey = localStorage.getItem("roomKey");
+        if (!roomKey) {
             initPairKey();
             localStorage.clear();
         }
