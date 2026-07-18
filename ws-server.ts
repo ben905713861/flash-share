@@ -73,6 +73,7 @@ wss.on("connection", (ws: WebSocket, request) => {
         sendMsg(targetWs, 'PAIR_SUCC', { roomKey });
       } catch (e) {
         console.error('register pairKey failed', e);
+        sendMsg(ws, 'PAIR_FAIL');
       }
       return;
     }

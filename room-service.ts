@@ -32,6 +32,7 @@ export default class RoomService {
             throw new Error('Unable to joinRoom, room is full');
         }
         room.wsList.push(ws);
+        this.#ws2roomMap.set(ws, room);
         room.lastConnectTime = new Date();
     }
 
@@ -67,7 +68,7 @@ export default class RoomService {
         });
         this.#roomKey2roomMap.forEach((room: Room, roomKey: string) => {
             if (room.wsList.length === 0) {
-                if (room.lastConnectTime.getTime() - Date.now() > 3600 * 1000) {
+                if (Date.now() - room.lastConnectTime.getTime() > 3600 * 1000) {
                     this.#roomKey2roomMap.delete(roomKey);
                 }
             }

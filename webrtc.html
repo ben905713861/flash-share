@@ -197,7 +197,7 @@
             const { roomKey } = data;
             localStorage.setItem('roomKey', roomKey);
             sendMsg("JOIN_ROOM");
-        } else if (type === "PAIR_FAILED") {
+        } else if (type === "PAIR_FAIL") {
             console.log('pair failed');
             clearConnHistory();
         } else if (type === "JOIN_ROOM_WAIT") {
