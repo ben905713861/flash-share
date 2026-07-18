@@ -208,6 +208,9 @@
             if (isOfferer) {
                 webrtcCreateOffer();
             }
+        } else if (type === "JOIN_ROOM_FAIL") {
+            console.log('join room failed');
+            clearConnHistory();
         } else if (type === "SDP") {
             console.log("SDP Received, create answer");
             document.getElementById("initBtn").disabled = true;

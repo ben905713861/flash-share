@@ -33,7 +33,11 @@ wss.on("connection", (ws: WebSocket, request) => {
     try {
       reqBody = JSON.parse(message.toString());
     } catch (e) {
-      console.error("invalid request body", e);
+      console.error("invalid request body", message.toString(), e);
+      return;
+    }
+    if (reqBody == null || reqBody instanceof Array) {
+      console.error("invalid request body", reqBody);
       return;
     }
     const { type, data } = reqBody;
@@ -87,8 +91,12 @@ wss.on("connection", (ws: WebSocket, request) => {
       try {
         roomService.joinRoom(roomKey, ws);
         const roomWsList: WebSocket[] = roomService.getRoomWsList(roomKey);
-        for (let i = 0; i < roomWsList.length; i++) {
-          sendMsg(roomWsList[i], 'JOIN_ROOM_SUCC', { isOfferer: i == 0 });
+        if (roomWsList.length == 1) {
+          sendMsg(ws, 'JOIN_ROOM_WAIT');
+        } else {
+          for (let i = 0; i < roomWsList.length; i++) {
+            sendMsg(roomWsList[i], 'JOIN_ROOM_SUCC', { isOfferer: i == 0 });
+          }
         }
       } catch (e) {
         console.error('join room error', e);
@@ -131,5 +139,9 @@ wss.on('error', (error) => {
 });
 
 function sendMsg(ws: any, type: string, data?: any) {
-  ws.send(JSON.stringify({ type, data }));
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type, data }));
+  } else {
+    console.error('WebSocket is not open, cannot send message');
+  }
 }
