@@ -3,8 +3,11 @@ import https from "https";
 import fs from "fs";
 import RoomService from "./room-service";
 import {PairService} from "./pair-service";
+import MessageRateService from "./message-rate-service";
 
 const PORT = 8011;
+const MAX_CONNECTIONS = 200;
+const MAX_PAYLOAD_BYTES = 256 * 1024;
 
 const options = {
   key: fs.readFileSync("./cert/privkey.pem"),
@@ -22,13 +25,34 @@ const server = https.createServer(options, (req, res) => {
   }
 });
 
+const messageRateService = new MessageRateService();
 const pairService = new PairService();
 const roomService = new RoomService();
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({
+  server,
+  path: "/ws",
+  maxPayload: MAX_PAYLOAD_BYTES,
+  perMessageDeflate: false,
+  verifyClient: ({ origin, req }, done) => {
+    if (!isAllowedOrigin(origin, req.headers.host)) {
+      done(false, 403, "WebSocket origin is not allowed");
+      return;
+    }
+    done(true);
+  }
+});
 wss.on("connection", (ws: WebSocket, request) => {
+  if (wss.clients.size > MAX_CONNECTIONS) {
+    ws.close(1013, "Server is at connection capacity");
+    return;
+  }
   console.log("Client connected");
 
   ws.on("message", (message) => {
+    if (messageRateService.isRateLimited(ws)) {
+      ws.close(1008, "Too many messages");
+      return;
+    }
     let reqBody;
     try {
       reqBody = JSON.parse(message.toString());
@@ -140,6 +164,10 @@ wss.on("connection", (ws: WebSocket, request) => {
     roomService.leaveRoom(ws);
     pairService.unregister(ws);
   });
+
+  ws.on("error", (error) => {
+    console.warn("WebSocket connection error:", error.message);
+  });
 });
 
 // HTTP + WebSocket 共用8011端口
@@ -160,4 +188,17 @@ function sendMsg(ws: any, type: string, data?: any) {
     throw new Error('WebSocket is not open, cannot send message');
   }
   ws.send(JSON.stringify({ type, data }));
+}
+
+function isAllowedOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin || !host) {
+    return false;
+  }
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.host === host;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
 }

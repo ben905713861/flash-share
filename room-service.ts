@@ -5,20 +5,14 @@ export default class RoomService {
     #ws2roomMap: Map<WebSocket, Room> = new Map();
 
     constructor() {
-        setInterval(this.#clear, 3600 * 1000);
+        setInterval(() => this.#clear(), 3600 * 1000);
     }
 
     createRoom(): string {
         const roomKey = crypto.randomUUID() + crypto.randomUUID();
-        const room = new Room(roomKey, [], new Date());
+        const room: Room = { roomKey, wsList: [], lastConnectTime: new Date() };
         this.#roomKey2roomMap.set(roomKey, room);
         return roomKey;
-    }
-
-    checkRoomKey(roomKey: string, ws: WebSocket): boolean {
-        const room: Room = this.getRoomInfo(roomKey);
-        return room.wsList.indexOf(ws) >= 0;
-        // todo
     }
 
     joinRoom(roomKey: string, ws: WebSocket) {
@@ -84,12 +78,8 @@ export default class RoomService {
     }
 }
 
-class Room {
-    constructor(public roomKey: string,
-                public wsList: WebSocket[],
-                public lastConnectTime: Date) {
-        this.roomKey = roomKey;
-        this.wsList = wsList;
-        this.lastConnectTime = lastConnectTime;
-    }
+type Room = {
+    roomKey: string;
+    wsList: WebSocket[];
+    lastConnectTime: Date;
 }

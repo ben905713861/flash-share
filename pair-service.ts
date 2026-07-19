@@ -6,7 +6,7 @@ export class PairService {
     #wsPendingMap2: Map<WebSocket, Pair> = new Map();
 
     constructor() {
-        setInterval(this.#clear, 60 * 1000);
+        setInterval(() => this.#clear(), 60 * 1000);
     }
 
     register(pairKey: string, ws: WebSocket) {
@@ -26,7 +26,7 @@ export class PairService {
             this.#wsPendingMap.delete(pair.pairKey);
         }
         // scenario 4, diff key, diff ws.
-        pair = new Pair(pairKey, ws, new Date());
+        pair = { pairKey, ws, createTime: new Date() }
         this.#wsPendingMap.set(pairKey, pair);
         this.#wsPendingMap2.set(ws, pair);
     }
@@ -71,12 +71,8 @@ export class PairService {
     }
 }
 
-class Pair {
-    constructor(public pairKey: string,
-                public ws: WebSocket,
-                public createTime: Date) {
-        this.pairKey = pairKey;
-        this.ws = ws;
-        this.createTime = createTime;
-    }
+type Pair = {
+    pairKey: string;
+    ws: WebSocket;
+    createTime: Date;
 }
