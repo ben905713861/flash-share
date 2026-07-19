@@ -33,11 +33,14 @@ wss.on("connection", (ws: WebSocket, request) => {
     try {
       reqBody = JSON.parse(message.toString());
     } catch (e) {
-      console.error("invalid request body", message.toString(), e);
+      if (e instanceof Error) {
+        console.error('invalid request body', message.toString(), e);
+        sendMsg(ws, 'ERROR', { error: 'invalid request body' });
+      }
       return;
     }
     if (reqBody == null || reqBody instanceof Array) {
-      console.error("invalid request body", reqBody);
+      console.error('invalid request body', reqBody);
       return;
     }
     const { type, data } = reqBody;
@@ -60,7 +63,10 @@ wss.on("connection", (ws: WebSocket, request) => {
         pairService.register(pairKey, ws);
         sendMsg(ws, 'PENDING_PAIR_SUCC');
       } catch (e) {
-        console.error('register pairKey failed', e);
+        if (e instanceof Error) {
+          console.error('register pairKey failed', e);
+          sendMsg(ws, 'PENDING_PAIR_FAIL', { error: e.message });
+        }
       }
       return;
     }
@@ -76,8 +82,10 @@ wss.on("connection", (ws: WebSocket, request) => {
         sendMsg(targetWs, 'PAIR_SUCC', { roomKey });
         sendMsg(ws, 'PAIR_SUCC', { roomKey });
       } catch (e) {
-        console.error('register pairKey failed', e);
-        sendMsg(ws, 'PAIR_FAIL');
+        if (e instanceof Error) {
+          console.error('register pairKey failed', e);
+          sendMsg(ws, 'PAIR_FAIL', { error: e.message });
+        }
       }
       return;
     }
@@ -99,22 +107,31 @@ wss.on("connection", (ws: WebSocket, request) => {
           }
         }
       } catch (e) {
-        console.error('join room error', e);
-        sendMsg(ws, 'JOIN_ROOM_FAIL');
+        if (e instanceof Error) {
+          console.error('join room error', e);
+          sendMsg(ws, 'JOIN_ROOM_FAIL', { error: e.message });
+        }
       }
       return;
     }
     // other types
     try {
       const roomWsList: WebSocket[] = roomService.getRoomWsList(roomKey);
+      if (roomWsList.indexOf(ws) < 0) {
+        sendMsg(ws, 'ERROR', { error: 'roomKey does not match ws' });
+        return;
+      }
       const targetWsList: WebSocket[] = roomWsList.filter((item: WebSocket) => item !== ws);
       targetWsList.forEach((targetWs: WebSocket) => {
         if (targetWs.readyState === WebSocket.OPEN) {
           targetWs.send(message.toString());
         }
-      })
+      });
     } catch (e) {
-      console.error('exchange ws message error', e);
+      if (e instanceof Error) {
+        console.error('exchange ws message error', e);
+        sendMsg(ws, 'ERROR', { error: e.message });
+      }
     }
   });
 

@@ -44,6 +44,12 @@ export class PairService {
         if (pair.ws.readyState !== WebSocket.OPEN) {
             throw new Error('target ws is not opened.');
         }
+        // clear requester
+        const requesterPair: Pair | undefined = this.#wsPendingMap2.get(ws);
+        if (requesterPair) {
+            this.#wsPendingMap.delete(requesterPair.pairKey);
+            this.#wsPendingMap2.delete(requesterPair.ws);
+        }
         return pair.ws;
     }
 

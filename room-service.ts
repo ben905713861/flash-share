@@ -15,8 +15,16 @@ export default class RoomService {
         return roomKey;
     }
 
+    checkRoomKey(roomKey: string, ws: WebSocket): boolean {
+        const room: Room = this.getRoomInfo(roomKey);
+        return room.wsList.indexOf(ws) >= 0;
+        // todo
+    }
+
     joinRoom(roomKey: string, ws: WebSocket) {
         const room: Room = this.getRoomInfo(roomKey);
+        room.wsList = room.wsList.filter((item: WebSocket) => item.readyState === WebSocket.OPEN);
+
         // scenario 2, send duplicated request (same roomKey and ws) to join same room
         let roomIndex = room.wsList.indexOf(ws);
         if (roomIndex >= 0) {

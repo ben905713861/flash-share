@@ -195,6 +195,9 @@
     function webRTCSwap(type, data) {
         if (type === "PENDING_PAIR_SUCC") {
             console.log("PENDING_PAIR_SUCC");
+        } else if (type === "PENDING_PAIR_FAIL") {
+            console.log('register pair failed');
+            clearConnHistory();
         } else if (type === "PAIR_SUCC") {
             console.log('pair success');
             const { roomKey } = data;
