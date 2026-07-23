@@ -29,6 +29,7 @@ export class PairService {
         pair = { pairKey, ws, createTime: new Date() }
         this.#wsPendingMap.set(pairKey, pair);
         this.#wsPendingMap2.set(ws, pair);
+        console.log("#wsPendingMap", this.#wsPendingMap.keys())
     }
 
     pair(pairKey: string, ws: WebSocket): WebSocket {

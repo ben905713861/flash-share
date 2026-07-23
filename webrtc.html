@@ -15,11 +15,15 @@
     Content <textarea id="content"></textarea>
     <br>
     <button type="button" onclick="send()">send</button>
+    <br>
+    File <input id="file" type="file" />
+    <br>
+    <button type="button" onclick="sendFile()">sendFile</button>
 </div>
 
 <script>
-    let peer, dataChannel, heartBeatChannel, ws;
-    let lastPingAt;
+    let peer, dataChannel, fileChannel, heartBeatChannel, ws;
+    let lastPingAt = Date.now(), lastPongAt = Date.now();
     let heartBeatInterval;
     const iceBuffer = [];
     let canAddIceCandidate = false;
@@ -53,6 +57,9 @@
             if (e.channel.label === "chat") {
                 dataChannel = e.channel;
                 dataChannelInit();
+            } else if (e.channel.label === "file") {
+                fileChannel = e.channel;
+                fileChannelInit();
             } else if (e.channel.label === "heartbeat") {
                 heartBeatChannel = e.channel;
                 heartBeatChannelInit();
@@ -60,17 +67,19 @@
         };
 
         peer.oniceconnectionstatechange = () => {
-            console.log("iceConnectionState", peer.iceConnectionState);
+            console.log("oniceconnectionstatechange, iceConnectionState=", peer.iceConnectionState);
+            let timeout;
             if (peer.iceConnectionState === "connected") {
-                maybeStartHeartbeat();
+                clearTimeout(timeout);
             } else if (peer.iceConnectionState === "disconnected") {
-                setTimeout(() => {
-                    if (peer.iceConnectionState !== "connected") {
+                timeout = setTimeout(() => {
+                    const state = peer?.iceConnectionState;
+                    if (state === "disconnected" || state === "failed") {
                         restartPeerConnection();
+                        console.log('restartPeerConnection');
                     }
-                }, 3000);
-            }
-            else if (peer.iceConnectionState === "failed") {
+                }, 60000);
+            } else if (peer.iceConnectionState === "failed") {
                 // 基本不可恢复，直接重建
                 restartPeerConnection();
             }
@@ -78,7 +87,6 @@
 
         callback && callback();
     }
-    webrtcInit(wsInit);
 
     function restartPeerConnection() {
         console.log('restartPeerConnection');
@@ -86,6 +94,10 @@
             dataChannel.close();
         }
         dataChannel = null;
+        if (fileChannel) {
+            fileChannel.close();
+        }
+        fileChannel = null;
         if (heartBeatChannel) {
             heartBeatChannel.close();
         }
@@ -105,7 +117,10 @@
         heartBeatInterval = null;
         lastPingAt = Date.now();
 
-        webrtcInit(wsInit);  // 重新 new RTCPeerConnection
+        // recreate RTCPeerConnection
+        webrtcInit(() => {
+            wsInit(prepareJoinRoom);
+        });
     }
 
     function dataChannelInit() {
@@ -116,21 +131,63 @@
             console.log("dataChannel received: ", event.data);
             document.getElementById("content").value = event.data;
         };
+        dataChannel.onclose = () => {
+            console.log("datachannel closed");
+        }
+    }
+
+    function fileChannelInit() {
+        fileChannel.onopen = () => {
+            console.log("fileChannel open");
+        }
+
+        const chunks = [];
+        fileChannel.onmessage = event => {
+            console.log("fileChannel received: ", event.data);
+            if (typeof event.data === "string") {
+                if (event.data === "file-start") {
+                    chunks.length = 0;
+                }
+                else if (event.data === "file-end") {
+                    const blob = new Blob(chunks);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "test.txt";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+                return;
+            }
+            // binary data
+            if (event.data instanceof ArrayBuffer) {
+                chunks.push(event.data);
+            } else if (event.data instanceof Blob) {
+                event.data.arrayBuffer().then(buffer => {
+                    chunks.push(buffer);
+                });
+            }
+        };
+        fileChannel.onclose = () => {
+            console.log("fileChannel closed");
+        }
     }
 
     function heartBeatChannelInit() {
         heartBeatChannel.onopen = () => {
             console.log("heartBeatChannel open");
-            maybeStartHeartbeat();
+            startHeartbeat();
         }
         heartBeatChannel.onmessage = e => {
-            console.log("heartBeatChannel received: ", e.data);
             const msg = e.data;
             if (msg.startsWith("ping:")) {
                 heartBeatChannel.send(msg.replace("ping:", "pong:"));
             } else if (msg.startsWith("pong:")) {
-                lastPingAt = msg.split(":")[1];
+                lastPongAt = Date.now();
             }
+        }
+        heartBeatChannel.onclose = () => {
+            console.log("heartBeatChannel closed");
         }
     }
 
@@ -144,6 +201,9 @@
         // Data channel setup
         dataChannel = peer.createDataChannel("chat");
         dataChannelInit();
+
+        fileChannel = peer.createDataChannel("file");
+        fileChannelInit();
 
         // heartbeat channel setup
         heartBeatChannel = peer.createDataChannel("heartbeat");
@@ -164,23 +224,20 @@
         canAddIceCandidate = true;
     }
 
-    function maybeStartHeartbeat() {
-        if (peer.iceConnectionState !== "connected" || heartBeatChannel?.readyState !== "open") {
+    function startHeartbeat() {
+        if (heartBeatInterval) {
             return;
         }
-        if (!heartBeatInterval) {
-            lastPingAt = Date.now();
-            heartBeatInterval = setInterval(() => {
-                if (Date.now() - lastPingAt > 15000) {
-                    console.log("peer dead, restart WebRTC");
-                    clearInterval(heartBeatInterval);
-                    heartBeatInterval = null;
-                    restartPeerConnection();
-                    return;
-                }
-                heartBeatChannel.send("ping:" + Date.now());
-            }, 5000);
-        }
+        heartBeatInterval = setInterval(() => {
+            const latency = lastPongAt - lastPingAt;
+            console.log("latency: ", latency);
+            if (heartBeatChannel.readyState === "open") {
+                lastPingAt = Date.now();
+                heartBeatChannel.send("ping:" + lastPingAt);
+            } else {
+                console.error('heartBeatChannel.readyState is not open, it is ', heartBeatChannel.readyState);
+            }
+        }, 5000);
     }
 
     function send() {
@@ -190,6 +247,23 @@
         }
         const textContent = document.getElementById("content").value;
         dataChannel.send(textContent);
+    }
+
+    async function sendFile() {
+        if (!fileChannel || fileChannel.readyState !== "open") {
+            console.warn("fileChannel not open");
+            return;
+        }
+        const file = document.getElementById("file").files[0];
+
+        fileChannel.send("file-start");
+        const CHUNK_SIZE = 64 * 1024;
+        for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
+            const chunk = file.slice(offset, offset + CHUNK_SIZE);
+            const buffer = await chunk.arrayBuffer();
+            fileChannel.send(buffer);
+        }
+        fileChannel.send("file-end");
     }
 
     function webRTCSwap(type, data) {
@@ -243,17 +317,26 @@
         }
     }
 
-    function wsInit() {
-        console.log("connect Ws");
+    function prepareJoinRoom() {
+        console.log("prepareJoinRoom");
+        const roomKey = localStorage.getItem('roomKey');
+        if (roomKey) {
+            sendMsg("JOIN_ROOM");
+        } else {
+            registerPairKey();
+        }
+    }
+
+    function wsInit(onopen) {
+        console.log("wsInit");
+        if (ws?.readyState === WebSocket.OPEN) {
+            onopen && onopen();
+            return;
+        }
         ws = new WebSocket(WS_HOST);
         ws.onopen = () => {
             console.log("Connection opened");
-            const roomKey = localStorage.getItem('roomKey');
-            if (roomKey) {
-                sendMsg("JOIN_ROOM");
-            } else {
-                registerPairKey();
-            }
+            onopen && onopen();
         };
         ws.onmessage = event => {
             const { type, data } = JSON.parse(event.data);
@@ -266,7 +349,9 @@
         };
         ws.onclose = event => {
             console.log(`WebSocket closed, eventCode: ${event.code}, reason: ${event.reason}`);
-            setTimeout(wsInit, 5000);
+            setTimeout(() => {
+                wsInit(onopen);
+            }, 5000);
         }
     }
 
@@ -308,6 +393,10 @@
             initPairKey();
             localStorage.clear();
         }
+
+        webrtcInit(() => {
+            wsInit(prepareJoinRoom);
+        });
     })();
 </script>
 </body>

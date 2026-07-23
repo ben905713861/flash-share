@@ -70,7 +70,7 @@ export default class RoomService {
         });
         this.#roomKey2roomMap.forEach((room: Room, roomKey: string) => {
             if (room.wsList.length === 0) {
-                if (Date.now() - room.lastConnectTime.getTime() > 3600 * 1000) {
+                if (Date.now() - room.lastConnectTime.getTime() > 24 * 3600 * 1000) {
                     this.#roomKey2roomMap.delete(roomKey);
                 }
             }
