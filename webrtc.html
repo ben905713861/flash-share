@@ -76,7 +76,6 @@
                     const state = peer?.iceConnectionState;
                     if (state === "disconnected" || state === "failed") {
                         restartPeerConnection();
-                        console.log('restartPeerConnection');
                     }
                 }, 60000);
             } else if (peer.iceConnectionState === "failed") {
@@ -137,6 +136,8 @@
     }
 
     function fileChannelInit() {
+        fileChannel.bufferedAmountLowThreshold = 1024 * 1024;
+
         fileChannel.onopen = () => {
             console.log("fileChannel open");
         }
@@ -145,15 +146,16 @@
         fileChannel.onmessage = event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
-                if (event.data === "file-start") {
+                const { type, filename, size, md5 } = JSON.parse(event.data);
+                if (type === "file-start") {
                     chunks.length = 0;
                 }
-                else if (event.data === "file-end") {
+                else if (type === "file-end") {
                     const blob = new Blob(chunks);
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = "test.txt";
+                    a.download = filename;
                     a.click();
                     URL.revokeObjectURL(url);
                 }
@@ -255,15 +257,42 @@
             return;
         }
         const file = document.getElementById("file").files[0];
+        const sendData = {
+            type: 'file-start',
+            filename: file.name,
+            size: file.size,
+            md5: '',
+        };
+        fileChannel.send(JSON.stringify(sendData));
 
-        fileChannel.send("file-start");
         const CHUNK_SIZE = 64 * 1024;
         for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
+            if (fileChannel.bufferedAmount >= fileChannel.bufferedAmountLowThreshold) {
+                console.log("fileChannel buffer is full, stop sending file", fileChannel.bufferedAmount, fileChannel.bufferedAmountLowThreshold);
+                await new Promise((resolve, reject) => {
+                    if (fileChannel.readyState !== "open") {
+                        reject(new Error("Channel closed"));
+                        return;
+                    }
+                    console.log("fileChannel buffer", fileChannel.bufferedAmount, fileChannel.bufferedAmountLowThreshold);
+                    if (fileChannel.bufferedAmount < fileChannel.bufferedAmountLowThreshold) {
+                        resolve();
+                        return;
+                    }
+                    const handler = () => {
+                        console.log("continue sending file");
+                        resolve();
+                    }
+                    fileChannel.addEventListener("bufferedamountlow", handler, { once: true });
+                });
+            }
             const chunk = file.slice(offset, offset + CHUNK_SIZE);
             const buffer = await chunk.arrayBuffer();
             fileChannel.send(buffer);
         }
-        fileChannel.send("file-end");
+
+        sendData.type = 'file-end';
+        fileChannel.send(JSON.stringify(sendData));
     }
 
     function webRTCSwap(type, data) {
