@@ -16,7 +16,7 @@
     <br>
     <button type="button" onclick="send()">send</button>
     <br>
-    File <input id="file" type="file" />
+    File <input id="file" type="file" multiple />
     <br>
     <button type="button" onclick="sendFile()">sendFile</button>
 </div>
@@ -25,9 +25,13 @@
     let peer, dataChannel, fileChannel, heartBeatChannel, ws;
     let lastPingAt = Date.now(), lastPongAt = Date.now();
     let heartBeatInterval;
+    let isSendingFile = false;
     const iceBuffer = [];
     let canAddIceCandidate = false;
     const WS_HOST = "/ws";
+    const FILE_CHUNK_SIZE = 64 * 1024;
+    const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
+    const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
     function pair() {
         const targetPairKey = document.getElementById("targetPairKey").value;
@@ -136,7 +140,7 @@
     }
 
     function fileChannelInit() {
-        fileChannel.bufferedAmountLowThreshold = 1024 * 1024;
+        fileChannel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
 
         fileChannel.onopen = () => {
             console.log("fileChannel open");
@@ -251,12 +255,46 @@
         dataChannel.send(textContent);
     }
 
-    async function sendFile() {
-        if (!fileChannel || fileChannel.readyState !== "open") {
-            console.warn("fileChannel not open");
-            return;
+    function waitForFileChannelDrain(channel) {
+        if (channel.readyState !== "open") {
+            return Promise.reject(new Error("File channel closed"));
         }
-        const file = document.getElementById("file").files[0];
+        if (channel.bufferedAmount <= FILE_BUFFER_LOW_WATER_MARK) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+            const cleanup = () => {
+                channel.removeEventListener("bufferedamountlow", onLow);
+                channel.removeEventListener("close", onClose);
+                channel.removeEventListener("error", onError);
+            };
+            const onLow = () => {
+                cleanup();
+                resolve();
+            };
+            const onClose = () => {
+                cleanup();
+                reject(new Error("File channel closed"));
+            };
+            const onError = () => {
+                cleanup();
+                reject(new Error("File channel failed"));
+            };
+
+            channel.addEventListener("bufferedamountlow", onLow, { once: true });
+            channel.addEventListener("close", onClose, { once: true });
+            channel.addEventListener("error", onError, { once: true });
+
+            if (channel.readyState !== "open") {
+                onClose();
+            } else if (channel.bufferedAmount <= FILE_BUFFER_LOW_WATER_MARK) {
+                onLow();
+            }
+        });
+    }
+
+    async function sendSingleFile(file) {
         const sendData = {
             type: 'file-start',
             filename: file.name,
@@ -265,34 +303,51 @@
         };
         fileChannel.send(JSON.stringify(sendData));
 
-        const CHUNK_SIZE = 64 * 1024;
-        for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
-            if (fileChannel.bufferedAmount >= fileChannel.bufferedAmountLowThreshold) {
-                console.log("fileChannel buffer is full, stop sending file", fileChannel.bufferedAmount, fileChannel.bufferedAmountLowThreshold);
-                await new Promise((resolve, reject) => {
-                    if (fileChannel.readyState !== "open") {
-                        reject(new Error("Channel closed"));
-                        return;
-                    }
-                    console.log("fileChannel buffer", fileChannel.bufferedAmount, fileChannel.bufferedAmountLowThreshold);
-                    if (fileChannel.bufferedAmount < fileChannel.bufferedAmountLowThreshold) {
-                        resolve();
-                        return;
-                    }
-                    const handler = () => {
-                        console.log("continue sending file");
-                        resolve();
-                    }
-                    fileChannel.addEventListener("bufferedamountlow", handler, { once: true });
-                });
+        for (let offset = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
+            if (fileChannel.readyState !== "open") {
+                throw new Error("File channel closed");
             }
-            const chunk = file.slice(offset, offset + CHUNK_SIZE);
-            const buffer = await chunk.arrayBuffer();
-            fileChannel.send(buffer);
+            if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
+                console.log("fileChannel buffer is full, waiting for drain", fileChannel.bufferedAmount);
+                await waitForFileChannelDrain(fileChannel);
+            }
+            console.log('continue to send file');
+            const chunk = file.slice(offset, offset + FILE_CHUNK_SIZE);
+            fileChannel.send(await chunk.arrayBuffer());
         }
 
+        if (fileChannel.readyState !== "open") {
+            throw new Error("File channel closed");
+        }
         sendData.type = 'file-end';
         fileChannel.send(JSON.stringify(sendData));
+    }
+
+    async function sendFile() {
+        if (!fileChannel || fileChannel.readyState !== "open") {
+            console.warn("fileChannel not open");
+            return;
+        }
+        const files = Array.from(document.getElementById("file").files);
+        if (files.length === 0) {
+            console.warn("No files selected");
+            return;
+        }
+        if (isSendingFile) {
+            console.warn("A file transfer is already in progress");
+            return;
+        }
+        isSendingFile = true;
+        try {
+            for (const file of files) {
+                console.log("Sending file", file.name);
+                await sendSingleFile(file);
+            }
+        } catch (error) {
+            console.error("File transfer failed", error);
+        } finally {
+            isSendingFile = false;
+        }
     }
 
     function webRTCSwap(type, data) {
