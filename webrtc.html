@@ -14,7 +14,7 @@
     <br>
     Content <textarea id="content"></textarea>
     <br>
-    <button type="button" onclick="send()">send</button>
+    <button type="button" onclick="dataChannelSend()">send</button>
     <br>
     File <input id="file" type="file" multiple />
     <br>
@@ -161,38 +161,44 @@
             console.log("fileChannel open");
         }
 
-        const chunks = [];
+        let dirPicker, writable;
         fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
-                const { type, filename, size, hash } = JSON.parse(event.data);
-                if (type === "file-start") {
-                    chunks.length = 0;
-                }
-                else if (type === "file-end") {
-                    let blob;
+                const { type, files, filename, size, hash } = JSON.parse(event.data);
+                if (type === "file-request") {
                     try {
-                        blob = new Blob(chunks);
-                        const currentHash = await sha256Hex(await blob.arrayBuffer());
-                        if (blob.size !== size || currentHash !== hash) {
-                            throw new Error('file is corrupted, filename=' + filename);
-                        }
-                    } catch (error) {
-                        console.error("File receive failed", error);
+                        dirPicker = await window.showDirectoryPicker();
+                    } catch (e) {
+                        console.log(e.message);
+                        fileChannelSend({ type: "file-request-reject" });
                         return;
                     }
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    console.log(files, dirPicker);
+                    fileChannelSend({ type: "file-request-ack" });
+                }
+                else if (type === "file-request-ack") {
+                    const files = document.getElementById("file").files;
+                    for (const file of files) {
+                        await sendSingleFile(file);
+                    }
+                }
+                else if (type === "file-request-reject") {
+                    isSendingFile = false;
+                    alert('remote device rejected to receive files');
+                }
+                else if (type === "file-start") {
+                    const fileHandle = await dirPicker.getFileHandle(filename, { create: true });
+                    writable = await fileHandle.createWritable();
+                }
+                else if (type === "file-end") {
+                    writable.close();
                 }
                 return;
             }
             // binary data
             if (event.data instanceof ArrayBuffer) {
-                chunks.push(event.data);
+                writable.write(event.data);
             } else {
                 console.warn("received invalid type", typeof event.data);
             }
@@ -272,13 +278,21 @@
         }, 5000);
     }
 
-    function send() {
+    function dataChannelSend() {
         if (!dataChannel || dataChannel.readyState !== "open") {
             console.warn("dataChannel not open");
             return;
         }
         const textContent = document.getElementById("content").value;
         dataChannel.send(textContent);
+    }
+
+    function fileChannelSend(content) {
+        if (!fileChannel || fileChannel.readyState !== "open") {
+            console.warn("fileChannel not open");
+            return;
+        }
+        fileChannel.send(JSON.stringify(content));
     }
 
     function waitForFileChannelDrain(channel) {
@@ -328,7 +342,7 @@
             size: file.size,
             hash,
         };
-        fileChannel.send(JSON.stringify(sendData));
+        fileChannelSend(sendData);
 
         for (let offset = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
             if (fileChannel.readyState !== "open") {
@@ -347,7 +361,7 @@
             throw new Error("File channel closed");
         }
         sendData.type = 'file-end';
-        fileChannel.send(JSON.stringify(sendData));
+        fileChannelSend(sendData);
     }
 
     async function sendFile() {
@@ -355,7 +369,7 @@
             console.warn("fileChannel not open");
             return;
         }
-        const files = Array.from(document.getElementById("file").files);
+        const files = document.getElementById("file").files;
         if (files.length === 0) {
             console.warn("No files selected");
             return;
@@ -366,10 +380,10 @@
         }
         isSendingFile = true;
         try {
-            for (const file of files) {
-                console.log("Sending file", file.name);
-                await sendSingleFile(file);
-            }
+            let fileDetails = files.map((file) => {
+                return { filename: file.name, size: file.size };
+            });
+            fileChannelSend({ type: "file-request", files: fileDetails });
         } catch (error) {
             console.error("File transfer failed", error);
         } finally {
