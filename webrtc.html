@@ -25,6 +25,7 @@
     let peer, dataChannel, fileChannel, heartBeatChannel, ws;
     let lastPingAt = Date.now(), lastPongAt = Date.now();
     let heartBeatInterval;
+    let iceDisconnectTimeout;
     let isSendingFile = false;
     const iceBuffer = [];
     let canAddIceCandidate = false;
@@ -42,7 +43,7 @@
         sendMsg('PAIR', { targetPairKey });
     }
 
-    function webrtcInit(callback) {
+    function webrtcInit() {
         console.log('webrtcInit');
         peer = new RTCPeerConnection({
             iceServers: [
@@ -72,58 +73,59 @@
 
         peer.oniceconnectionstatechange = () => {
             console.log("oniceconnectionstatechange, iceConnectionState=", peer.iceConnectionState);
-            let timeout;
-            if (peer.iceConnectionState === "connected") {
-                clearTimeout(timeout);
+            if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = null;
             } else if (peer.iceConnectionState === "disconnected") {
-                timeout = setTimeout(() => {
-                    const state = peer?.iceConnectionState;
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = setTimeout(() => {
+                    const state = peer.iceConnectionState;
                     if (state === "disconnected" || state === "failed") {
                         restartPeerConnection();
                     }
                 }, 60000);
             } else if (peer.iceConnectionState === "failed") {
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = null;
                 // 基本不可恢复，直接重建
                 restartPeerConnection();
             }
         };
-
-        callback && callback();
     }
 
     function restartPeerConnection() {
         console.log('restartPeerConnection');
-        if (dataChannel) {
-            dataChannel.close();
-        }
-        dataChannel = null;
-        if (fileChannel) {
-            fileChannel.close();
-        }
-        fileChannel = null;
-        if (heartBeatChannel) {
-            heartBeatChannel.close();
-        }
-        heartBeatChannel = null;
-        if (peer) {
-            peer.close();
-        }
-        peer = null;
-        canAddIceCandidate = false;
-        iceBuffer.length = 0;
-        if (ws) {
-            ws.onclose = () => {};
-            ws.close();
-        }
-        ws = null;
+
+        clearTimeout(iceDisconnectTimeout);
+        iceDisconnectTimeout = null;
+
         clearInterval(heartBeatInterval);
         heartBeatInterval = null;
+
+        dataChannel?.close();
+        dataChannel = null;
+        fileChannel?.close();
+        fileChannel = null;
+        heartBeatChannel?.close();
+        heartBeatChannel = null;
+        peer?.close();
+        peer = null;
+
+        canAddIceCandidate = false;
+        iceBuffer.length = 0;
         lastPingAt = Date.now();
 
         // recreate RTCPeerConnection
-        webrtcInit(() => {
+        webrtcInit();
+
+        if (ws && ws.readyState !== WebSocket.OPEN) {
+            console.log('reconnect ws');
+            ws.onclose = () => {};
+            ws.close();
+            ws = null;
+
             wsInit(prepareJoinRoom);
-        });
+        }
     }
 
     function dataChannelInit() {
@@ -216,8 +218,8 @@
 
     // Create offer
     function webrtcCreateOffer() {
-        if (dataChannel && heartBeatChannel) {
-            return;
+        if (dataChannel || fileChannel || heartBeatChannel) {
+            restartPeerConnection(); // todo
         }
         console.log('webrtcCreateOffer');
 
@@ -225,12 +227,15 @@
         dataChannel = peer.createDataChannel("chat");
         dataChannelInit();
 
+        // file channel setup
         fileChannel = peer.createDataChannel("file");
         fileChannelInit();
 
         // heartbeat channel setup
         heartBeatChannel = peer.createDataChannel("heartbeat");
         heartBeatChannelInit();
+
+        // create offer
         peer.createOffer()
             .then(offer => peer.setLocalDescription(offer))
             .then(() => {
@@ -388,7 +393,7 @@
             const { isOfferer } = data;
             console.log("joined room, isOfferer: ", isOfferer);
             if (isOfferer) {
-                webrtcCreateOffer();
+                webrtcCreateOffer(true);
             }
         } else if (type === "JOIN_ROOM_FAIL") {
             console.log('join room failed');
@@ -496,9 +501,8 @@
             localStorage.clear();
         }
 
-        webrtcInit(() => {
-            wsInit(prepareJoinRoom);
-        });
+        webrtcInit();
+        wsInit(prepareJoinRoom);
     })();
 </script>
 </body>
