@@ -139,23 +139,42 @@
         }
     }
 
+    async function sha256Hex(data) {
+        if (!globalThis.crypto?.subtle) {
+            throw new Error("Web Crypto API is unavailable; use HTTPS or localhost");
+        }
+        const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+
     function fileChannelInit() {
         fileChannel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
+        fileChannel.binaryType = "arraybuffer";
 
         fileChannel.onopen = () => {
             console.log("fileChannel open");
         }
 
         const chunks = [];
-        fileChannel.onmessage = event => {
+        fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
-                const { type, filename, size, md5 } = JSON.parse(event.data);
+                const { type, filename, size, hash } = JSON.parse(event.data);
                 if (type === "file-start") {
                     chunks.length = 0;
                 }
                 else if (type === "file-end") {
-                    const blob = new Blob(chunks);
+                    let blob;
+                    try {
+                        blob = new Blob(chunks);
+                        const currentHash = await sha256Hex(await blob.arrayBuffer());
+                        if (blob.size !== size || currentHash !== hash) {
+                            throw new Error('file is corrupted, filename=' + filename);
+                        }
+                    } catch (error) {
+                        console.error("File receive failed", error);
+                        return;
+                    }
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
@@ -168,10 +187,8 @@
             // binary data
             if (event.data instanceof ArrayBuffer) {
                 chunks.push(event.data);
-            } else if (event.data instanceof Blob) {
-                event.data.arrayBuffer().then(buffer => {
-                    chunks.push(buffer);
-                });
+            } else {
+                console.warn("received invalid type", typeof event.data);
             }
         };
         fileChannel.onclose = () => {
@@ -295,11 +312,12 @@
     }
 
     async function sendSingleFile(file) {
+        const hash = await sha256Hex(await file.arrayBuffer());
         const sendData = {
             type: 'file-start',
             filename: file.name,
             size: file.size,
-            md5: '',
+            hash,
         };
         fileChannel.send(JSON.stringify(sendData));
 
