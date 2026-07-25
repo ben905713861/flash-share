@@ -82,6 +82,7 @@
                     const state = peer.iceConnectionState;
                     if (state === "disconnected" || state === "failed") {
                         restartPeerConnection();
+                        restartWs();
                     }
                 }, 60000);
             } else if (peer.iceConnectionState === "failed") {
@@ -89,6 +90,7 @@
                 iceDisconnectTimeout = null;
                 // 基本不可恢复，直接重建
                 restartPeerConnection();
+                restartWs();
             }
         };
     }
@@ -117,14 +119,16 @@
 
         // recreate RTCPeerConnection
         webrtcInit();
+    }
 
-        if (ws && ws.readyState !== WebSocket.OPEN) {
-            console.log('reconnect ws');
-            ws.onclose = () => {};
+    function restartWs() {
+        console.log('restart ws');
+        if (ws) {
+            ws.onclose = () => {
+                wsInit(prepareJoinRoom);
+            };
             ws.close();
             ws = null;
-
-            wsInit(prepareJoinRoom);
         }
     }
 
