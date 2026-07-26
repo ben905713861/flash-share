@@ -146,23 +146,6 @@
         }
     }
 
-    async function sha256Hex(data) {
-        if (!globalThis.crypto?.subtle) {
-            throw new Error("Web Crypto API is unavailable; use HTTPS or localhost");
-        }
-        const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
-        return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-    }
-
-    function senFileStart(file) {
-        const sendData = {
-            type: 'file-start',
-            filename: file.name,
-            size: file.size,
-        };
-        fileChannelSend(sendData);
-    }
-
     function fileChannelInit() {
         fileChannel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
         fileChannel.binaryType = "arraybuffer";
@@ -171,7 +154,7 @@
             console.log("fileChannel open");
         }
 
-        let dirPicker, writable;
+        let dirPicker, fileHandle, writable;
         fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
@@ -189,7 +172,11 @@
                 }
                 else if (type === "file-request-ack") {
                     const file = sendingFiles[0];
-                    senFileStart(file);
+                    fileChannelSend({
+                        type: 'file-start',
+                        filename: file.name,
+                        size: file.size,
+                    });
                 }
                 else if (type === "file-request-reject") {
                     isSendingFile = false;
@@ -197,7 +184,7 @@
                 }
                 else if (type === "file-start") {
                     try {
-                        const fileHandle = await dirPicker.getFileHandle(filename, { create: true });
+                        fileHandle = await dirPicker.getFileHandle(filename, { create: true });
                         writable = await fileHandle.createWritable();
                         fileChannelSend({ type: "file-start-ack", filename });
                     } catch (e) {
@@ -214,7 +201,7 @@
                     }
                     try {
                         await sendSingleFile(file);
-                        fileChannelSend({ type: "file-end", filename, size });
+                        fileChannelSend({ type: "file-end", filename: file.name, size: file.size });
                     } catch (e) {
                         console.error(e.message);
                         sendingFiles.length = 0;
@@ -228,16 +215,8 @@
                     console.error('received file-start-reject, exit');
                 }
                 else if (type === "file-end") {
-                    if (writable.size() !== size) { // todo
-                        console.log("received corrupted file, ", filename);
-                        fileChannelSend({ type: "file-end-reject" });
-                        await writable?.abort();
-                        writable = null;
-                        return;
-                    }
                     try {
                         await writable.close();
-                        fileChannelSend({ type: "file-end-ack", filename });
                     } catch (e) {
                         console.error(e.message);
                         fileChannelSend({ type: "file-end-reject" });
@@ -245,6 +224,17 @@
                     } finally {
                         writable = null;
                     }
+                    const file = await fileHandle.getFile();
+                    if (file.size !== size) { // todo
+                        console.log("received corrupted file, ", filename);
+                        fileChannelSend({ type: "file-end-reject" });
+                        await writable?.abort();
+                        writable = null;
+                        await fileHandle?.abort();
+                        fileHandle = null;
+                        return;
+                    }
+                    fileChannelSend({ type: "file-end-ack", filename });
                 }
                 else if (type === "file-send-error") {
                     await writable?.abort();
@@ -257,7 +247,12 @@
                         isSendingFile = false;
                         return;
                     }
-                    senFileStart(sendingFiles[0]);
+                    const file = sendingFiles[0];
+                    fileChannelSend({
+                        type: 'file-start',
+                        filename: file.name,
+                        size: file.size,
+                    });
                 }
                 else if (type === "file-end-reject") {
                     sendingFiles.length = 0;
