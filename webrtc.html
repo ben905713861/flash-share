@@ -221,20 +221,16 @@
                         console.error(e.message);
                         fileChannelSend({ type: "file-end-reject" });
                         await writable?.abort();
-                    } finally {
                         writable = null;
-                    }
-                    const file = await fileHandle.getFile();
-                    if (file.size !== size) { // todo
-                        console.log("received corrupted file, ", filename);
-                        fileChannelSend({ type: "file-end-reject" });
-                        await writable?.abort();
-                        writable = null;
-                        await fileHandle?.abort();
-                        fileHandle = null;
                         return;
                     }
-                    fileChannelSend({ type: "file-end-ack", filename });
+                    const file = await fileHandle.getFile();
+                    if (file.size === size) { // todo
+                        fileChannelSend({ type: "file-end-ack", filename });
+                        return;
+                    }
+                    console.log("received corrupted file, ", filename);
+                    fileChannelSend({ type: "file-end-reject" });
                 }
                 else if (type === "file-send-error") {
                     await writable?.abort();
