@@ -189,7 +189,7 @@
                 }
                 else if (type === "file-request-ack") {
                     const file = sendingFiles[0];
-                    extracted(file);
+                    senFileStart(file);
                 }
                 else if (type === "file-request-reject") {
                     isSendingFile = false;
@@ -213,9 +213,10 @@
                 else if (type === "file-end") {
                     try {
                         await writable.close();
-                        fileChannelSend({ type: "file-end-ack" });
+                        fileChannelSend({ type: "file-end-ack", filename });
                     } catch (e) {
                         console.log(e.message);
+                        await writable.abort();
                         fileChannelSend({ type: "file-end-reject" });
                     }
                 }
@@ -415,7 +416,6 @@
             fileChannelSend({ type: "file-request", files: fileDetails });
         } catch (error) {
             console.error("File transfer failed", error);
-        } finally {
             isSendingFile = false;
         }
     }
