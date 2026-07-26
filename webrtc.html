@@ -196,9 +196,14 @@
                     alert('remote device rejected to receive files');
                 }
                 else if (type === "file-start") {
-                    const fileHandle = await dirPicker.getFileHandle(filename, { create: true });
-                    writable = await fileHandle.createWritable();
-                    fileChannelSend({ type: "file-start-ack", filename });
+                    try {
+                        const fileHandle = await dirPicker.getFileHandle(filename, { create: true });
+                        writable = await fileHandle.createWritable();
+                        fileChannelSend({ type: "file-start-ack", filename });
+                    } catch (e) {
+                        console.error(e.message, e);
+                        fileChannelSend({ type: "file-start-reject", filename });
+                    }
                 }
                 else if (type === "file-start-ack") {
                     // send file binary
@@ -207,18 +212,43 @@
                         console.error("file-start-ack error, file does not exist", filename);
                         return;
                     }
-                    await sendSingleFile(file);
-                    fileChannelSend({ type: "file-end", filename });
+                    try {
+                        await sendSingleFile(file);
+                        fileChannelSend({ type: "file-end", filename, size });
+                    } catch (e) {
+                        console.error(e.message);
+                        sendingFiles.length = 0;
+                        isSendingFile = false;
+                        fileChannelSend({ type: "file-send-error", filename });
+                    }
+                }
+                else if (type === "file-start-reject") {
+                    sendingFiles.length = 0;
+                    isSendingFile = false;
+                    console.error('received file-start-reject, exit');
                 }
                 else if (type === "file-end") {
+                    if (writable.size() !== size) { // todo
+                        console.log("received corrupted file, ", filename);
+                        fileChannelSend({ type: "file-end-reject" });
+                        await writable?.abort();
+                        writable = null;
+                        return;
+                    }
                     try {
                         await writable.close();
                         fileChannelSend({ type: "file-end-ack", filename });
                     } catch (e) {
-                        console.log(e.message);
-                        await writable.abort();
+                        console.error(e.message);
                         fileChannelSend({ type: "file-end-reject" });
+                        await writable?.abort();
+                    } finally {
+                        writable = null;
                     }
+                }
+                else if (type === "file-send-error") {
+                    await writable?.abort();
+                    writable = null;
                 }
                 else if (type === "file-end-ack") {
                     sendingFiles = sendingFiles.filter(file => file.name !== filename);
@@ -249,6 +279,8 @@
                 sendingFiles.length = 0;
                 isSendingFile = false;
             }
+            writable?.abort();
+            writable = null;
         }
     }
 
