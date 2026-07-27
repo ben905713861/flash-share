@@ -158,8 +158,12 @@
         fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
-                const { type, files, filename, size } = JSON.parse(event.data);
+                const { type, fileDetails, filename, size } = JSON.parse(event.data);
                 if (type === "file-request") {
+                    const fileList = fileDetails
+                        .map(({ filename, size }) => `${filename}: ${size} bytes`)
+                        .join("\n");
+                    alert(`Incoming ${fileDetails.length} files:\n${fileList}`);
                     try {
                         dirPicker = await window.showDirectoryPicker();
                     } catch (e) {
@@ -167,7 +171,6 @@
                         fileChannelSend({ type: "file-request-reject" });
                         return;
                     }
-                    console.log(files, dirPicker);
                     fileChannelSend({ type: "file-request-ack" });
                 }
                 else if (type === "file-request-ack") {
@@ -436,7 +439,7 @@
             let fileDetails = files.map((file) => {
                 return { filename: file.name, size: file.size };
             });
-            fileChannelSend({ type: "file-request", files: fileDetails });
+            fileChannelSend({ type: "file-request", fileDetails });
         } catch (error) {
             console.error("File transfer failed", error);
             isSendingFile = false;
