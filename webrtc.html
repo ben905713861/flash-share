@@ -21,6 +21,13 @@
     <button type="button" onclick="sendFile()">sendFile</button>
 </div>
 
+<dialog id="receiveDialog">
+    <p>Incoming <span id="fileCount">0</span> files</p>
+    <pre id="file-list"></pre>
+    <button onclick="acceptFile()">Receive</button>
+    <button onclick="rejectFile()">Reject</button>
+</dialog>
+
 <script>
     let peer, dataChannel, fileChannel, heartBeatChannel, ws;
     let lastPingAt = Date.now(), lastPongAt = Date.now();
@@ -166,15 +173,9 @@
                     const fileList = fileDetails
                         .map(({ filename, size }) => `${filename}: ${size} bytes`)
                         .join("\n");
-                    alert(`Incoming ${fileDetails.length} files:\n${fileList}`);
-                    try {
-                        dirPicker = await window.showDirectoryPicker();
-                    } catch (e) {
-                        console.log(e.message);
-                        fileChannelSend({ type: "file-request-reject" });
-                        return;
-                    }
-                    fileChannelSend({ type: "file-request-ack" });
+                    document.getElementById("fileCount").innerText = fileDetails.length;
+                    document.getElementById("file-list").innerText = fileList;
+                    document.getElementById("receiveDialog").showModal();
                 }
                 else if (type === "file-request-ack") {
                     const file = sendingFiles[0];
@@ -305,6 +306,22 @@
             writable?.abort();
             writable = null;
         }
+    }
+
+    async function acceptFile() {
+        try {
+            dirPicker = await window.showDirectoryPicker();
+        } catch (e) {
+            console.log(e.message);
+            fileChannelSend({ type: "file-request-reject" });
+            return;
+        }
+        fileChannelSend({ type: "file-request-ack" });
+    }
+
+    function rejectFile() {
+        document.getElementById("receiveDialog").close();
+        fileChannelSend({ type: "file-request-reject" });
     }
 
     function heartBeatChannelInit() {
