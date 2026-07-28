@@ -30,8 +30,11 @@
     const iceBuffer = [];
     let canAddIceCandidate = false;
     let sendingFiles = [];
+    let wakeupFileSending, interruptFileSending;
+
     const WS_HOST = "/ws";
     const FILE_CHUNK_SIZE = 64 * 1024;
+    const FILE_CHUNK_WINDOW = 16;
     const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
     const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
@@ -154,7 +157,7 @@
             console.log("fileChannel open");
         }
 
-        let dirPicker, fileHandle, writable;
+        let dirPicker, fileHandle, writable, chunkIndex;
         fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
@@ -189,6 +192,7 @@
                     try {
                         fileHandle = await dirPicker.getFileHandle(filename, { create: true });
                         writable = await fileHandle.createWritable();
+                        chunkIndex = 0;
                         fileChannelSend({ type: "file-start-ack", filename });
                     } catch (e) {
                         console.error(e.message, e);
@@ -217,9 +221,16 @@
                     isSendingFile = false;
                     console.error('received file-start-reject, exit');
                 }
+                else if (type === "file-continue") {
+                    wakeupFileSending?.();
+                }
+                else if (type === "file-abort") {
+                    interruptFileSending?.();
+                }
                 else if (type === "file-end") {
                     try {
                         await writable.close();
+                        writable = null;
                     } catch (e) {
                         console.error(e.message);
                         fileChannelSend({ type: "file-end-reject" });
@@ -228,7 +239,7 @@
                         return;
                     }
                     const file = await fileHandle.getFile();
-                    if (file.size === size) { // todo
+                    if (file.size === size) {
                         fileChannelSend({ type: "file-end-ack", filename });
                         return;
                     }
@@ -262,7 +273,20 @@
             }
             // binary data
             if (event.data instanceof ArrayBuffer) {
-                await writable.write(event.data); // todo
+                try {
+                    await writable.write(event.data);
+                    writable = null;
+                } catch (e) {
+                    console.error(e.message);
+                    fileChannelSend({ type: 'file-abort' });
+                    writable?.abort();
+                    writable = null;
+                    return;
+                }
+                chunkIndex ++;
+                if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                    fileChannelSend({ type: 'file-continue' });
+                }
             } else {
                 console.warn("received invalid type", typeof event.data);
             }
@@ -273,6 +297,11 @@
                 sendingFiles.length = 0;
                 isSendingFile = false;
             }
+
+            interruptFileSending?.();
+            interruptFileSending = null;
+            wakeupFileSending = null;
+
             writable?.abort();
             writable = null;
         }
@@ -405,7 +434,7 @@
     }
 
     async function sendSingleFile(file) {
-        for (let offset = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
+        for (let offset = 0, chunkIndex = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
             if (fileChannel.readyState !== "open") {
                 throw new Error("File channel closed");
             }
@@ -416,6 +445,14 @@
             console.log('continue to send file');
             const chunk = file.slice(offset, offset + FILE_CHUNK_SIZE);
             fileChannel.send(await chunk.arrayBuffer());
+
+            chunkIndex ++;
+            if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                await new Promise((resolve, reject) => {
+                    wakeupFileSending = resolve;
+                    interruptFileSending = reject;
+                });
+            }
         }
     }
 
@@ -436,7 +473,7 @@
         isSendingFile = true;
         try {
             sendingFiles = [ ...files ];
-            let fileDetails = files.map((file) => {
+            let fileDetails = sendingFiles.map((file) => {
                 return { filename: file.name, size: file.size };
             });
             fileChannelSend({ type: "file-request", fileDetails });
