@@ -37,7 +37,8 @@
     const iceBuffer = [];
     let canAddIceCandidate = false;
     let sendingFiles = [];
-    let wakeupFileSending, interruptFileSending;
+    let wakeupFileSending, interruptFileSending, isInterruptFileSending;
+    let dirPicker, fileHandle, writable, chunkIndex;
 
     const WS_HOST = "/ws";
     const FILE_CHUNK_SIZE = 64 * 1024;
@@ -164,7 +165,6 @@
             console.log("fileChannel open");
         }
 
-        let dirPicker, fileHandle, writable, chunkIndex;
         fileChannel.onmessage = async event => {
             console.log("fileChannel received: ", event.data);
             if (typeof event.data === "string") {
@@ -309,6 +309,7 @@
     }
 
     async function acceptFile() {
+        document.getElementById("receiveDialog").close();
         try {
             dirPicker = await window.showDirectoryPicker();
         } catch (e) {
@@ -451,9 +452,14 @@
     }
 
     async function sendSingleFile(file) {
+        isInterruptFileSending = false;
         for (let offset = 0, chunkIndex = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
             if (fileChannel.readyState !== "open") {
                 throw new Error("File channel closed");
+            }
+            if (isInterruptFileSending) {
+                console.log("stop sending single file");
+                break;
             }
             if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
                 console.log("fileChannel buffer is full, waiting for drain", fileChannel.bufferedAmount);
@@ -467,7 +473,10 @@
             if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                 await new Promise((resolve, reject) => {
                     wakeupFileSending = resolve;
-                    interruptFileSending = reject;
+                    interruptFileSending = () => {
+                        isInterruptFileSending = true;
+                        reject();
+                    }
                 });
             }
         }
