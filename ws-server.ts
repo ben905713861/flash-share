@@ -1,6 +1,7 @@
 import {WebSocketServer, WebSocket} from 'ws';
 import https from "https";
 import fs from "fs";
+import path from "path";
 import RoomService from "./room-service";
 import {PairService} from "./pair-service";
 import MessageRateService from "./message-rate-service";
@@ -15,14 +16,27 @@ const options = {
 };
 
 const server = https.createServer(options, (req, res) => {
-  if (req.url === "/") {
-    fs.readFile("./webrtc.html", (err, data) => {
-      res.writeHead(200, {
-        "Content-Type": "text/html"
-      });
-      res.end(data);
-    });
+  const urlPath = new URL(req.url ?? "/", `https://${req.headers.host ?? "localhost"}`).pathname;
+  const requestPath = urlPath === "/" ? "index.html" : urlPath.replace(/^\//, "");
+  const distDir = path.resolve("h5/dist");
+  const filePath = path.resolve(distDir, requestPath ?? "index.html");
+  if (!filePath.startsWith(distDir + path.sep) && filePath !== distDir) {
+    res.writeHead(403).end("Forbidden");
+    return;
   }
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404).end("Build the web client with npm run build first.");
+      return;
+    }
+    const contentType = filePath.endsWith(".js")
+      ? "application/javascript"
+      : filePath.endsWith(".css")
+        ? "text/css; charset=utf-8"
+        : "text/html; charset=utf-8";
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(data);
+  });
 });
 
 const messageRateService = new MessageRateService();

@@ -1,0 +1,23 @@
+{
+  "name": "flash-share-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Flash Share WebRTC browser client",
+  "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "dev": "webpack --watch --config webpack.config.js"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "html-webpack-plugin": "^5.6.8",
+    "ts-loader": "^9.6.2",
+    "typescript": "^6.0.3",
+    "webpack": "^5.109.2",
+    "webpack-cli": "^7.2.2"
+  }
+}

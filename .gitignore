@@ -2,3 +2,5 @@
 /node_modules/
 /package-lock.json
 /cert/
+/h5/dist/
+/h5/node_modules/
