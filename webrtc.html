@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Data Channel Example</title>
+</head>
+<body>
+<h2>WebRTC Data Channel Example</h2>
+<div>
+    Pair Key <input id="pairKey" type="text" />
+    <br>
+    target Pair Key <input id="targetPairKey" type="text" />
+    <br>
+    <button id="initBtn" type="button" onclick="pair()">pair</button>
+    <br>
+    Content <textarea id="content"></textarea>
+    <br>
+    <button type="button" onclick="dataChannelSend()">send</button>
+    <br>
+    File <input id="file" type="file" multiple />
+    <br>
+    <button type="button" onclick="sendFile()">sendFile</button>
+</div>
+
+<dialog id="receiveDialog">
+    <p>Incoming <span id="fileCount">0</span> files</p>
+    <pre id="file-list"></pre>
+    <button onclick="acceptFile()">Receive</button>
+    <button onclick="rejectFile()">Reject</button>
+</dialog>
+
+<script>
+    let peer, dataChannel, fileChannel, heartBeatChannel, ws;
+    let lastPingAt = Date.now(), lastPongAt = Date.now();
+    let heartBeatInterval;
+    let iceDisconnectTimeout;
+    let isSendingFile = false;
+    const iceBuffer = [];
+    let canAddIceCandidate = false;
+    let sendingFiles = [];
+    let wakeupFileSending, interruptFileSending, isInterruptFileSending;
+    let dirPicker;
+
+    const WS_HOST = "/ws";
+    const FILE_CHUNK_SIZE = 64 * 1024;
+    const FILE_CHUNK_WINDOW = 16;
+    const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
+    const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
+
+    function pair() {
+        const targetPairKey = document.getElementById("targetPairKey").value;
+        if (targetPairKey === null || targetPairKey === '') {
+            alert('targetPairKey cannot be null');
+            return;
+        }
+        sendMsg('PAIR', { targetPairKey });
+    }
+
+    function webrtcInit() {
+        console.log('webrtcInit');
+        peer = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" }
+            ]
+        });
+
+        peer.onicecandidate = event => {
+            if (event.candidate) {
+                sendMsg('ICE', event.candidate);
+            }
+        };
+
+        // answerer
+        peer.ondatachannel = e => {
+            if (e.channel.label === "chat") {
+                dataChannel = e.channel;
+                dataChannelInit();
+            } else if (e.channel.label === "file") {
+                fileChannel = e.channel;
+                fileChannelInit();
+            } else if (e.channel.label === "heartbeat") {
+                heartBeatChannel = e.channel;
+                heartBeatChannelInit();
+            }
+        };
+
+        peer.oniceconnectionstatechange = () => {
+            console.log("oniceconnectionstatechange, iceConnectionState=", peer.iceConnectionState);
+            if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = null;
+            } else if (peer.iceConnectionState === "disconnected") {
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = setTimeout(() => {
+                    const state = peer.iceConnectionState;
+                    if (state === "disconnected" || state === "failed") {
+                        restartPeerConnection();
+                        restartWs();
+                    }
+                }, 60000);
+            } else if (peer.iceConnectionState === "failed") {
+                clearTimeout(iceDisconnectTimeout);
+                iceDisconnectTimeout = null;
+                // 基本不可恢复，直接重建
+                restartPeerConnection();
+                restartWs();
+            }
+        };
+    }
+
+    function restartPeerConnection() {
+        console.log('restartPeerConnection');
+
+        clearTimeout(iceDisconnectTimeout);
+        iceDisconnectTimeout = null;
+
+        clearInterval(heartBeatInterval);
+        heartBeatInterval = null;
+
+        dataChannel?.close();
+        dataChannel = null;
+        fileChannel?.close();
+        fileChannel = null;
+        heartBeatChannel?.close();
+        heartBeatChannel = null;
+        peer?.close();
+        peer = null;
+
+        canAddIceCandidate = false;
+        iceBuffer.length = 0;
+        lastPingAt = Date.now();
+
+        // recreate RTCPeerConnection
+        webrtcInit();
+    }
+
+    function restartWs() {
+        console.log('restart ws');
+        if (ws) {
+            ws.onclose = () => {
+                wsInit(prepareJoinRoom);
+            };
+            ws.close();
+            ws = null;
+        }
+    }
+
+    function dataChannelInit() {
+        dataChannel.onopen = () => {
+            console.log("datachannel open");
+        }
+        dataChannel.onmessage = event => {
+            console.log("dataChannel received: ", event.data);
+            document.getElementById("content").value = event.data;
+        };
+        dataChannel.onclose = () => {
+            console.log("datachannel closed");
+        }
+    }
+
+    function fileChannelInit() {
+        fileChannel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
+        fileChannel.binaryType = "arraybuffer";
+        let fileHandle, writable, chunkIndex;
+
+        fileChannel.onopen = () => {
+            console.log("fileChannel open");
+        }
+
+        fileChannel.onmessage = async event => {
+            console.log("fileChannel received: ", event.data);
+            if (typeof event.data === "string") {
+                const { type, fileDetails, filename, size } = JSON.parse(event.data);
+                if (type === "file-request") {
+                    const fileList = fileDetails
+                        .map(({ filename, size }) => `${filename}: ${size} bytes`)
+                        .join("\n");
+                    document.getElementById("fileCount").innerText = fileDetails.length;
+                    document.getElementById("file-list").innerText = fileList;
+                    document.getElementById("receiveDialog").showModal();
+                }
+                else if (type === "file-request-ack") {
+                    const file = sendingFiles[0];
+                    fileChannelSend({
+                        type: 'file-start',
+                        filename: file.name,
+                        size: file.size,
+                    });
+                }
+                else if (type === "file-request-reject") {
+                    isSendingFile = false;
+                    alert('remote device rejected to receive files');
+                }
+                else if (type === "file-start") {
+                    try {
+                        fileHandle = await dirPicker.getFileHandle(filename, { create: true });
+                        writable = await fileHandle.createWritable();
+                        chunkIndex = 0;
+                        fileChannelSend({ type: "file-start-ack", filename });
+                    } catch (e) {
+                        console.error(e.message, e);
+                        fileChannelSend({ type: "file-start-reject", filename });
+                    }
+                }
+                else if (type === "file-start-ack") {
+                    // send file binary
+                    const file = sendingFiles.find(file => file.name === filename);
+                    if (!file) {
+                        console.error("file-start-ack error, file does not exist", filename);
+                        return;
+                    }
+                    try {
+                        await sendSingleFile(file);
+                        fileChannelSend({ type: "file-end", filename: file.name, size: file.size });
+                    } catch (e) {
+                        console.error(e.message);
+                        sendingFiles.length = 0;
+                        isSendingFile = false;
+                        fileChannelSend({ type: "file-send-error", filename });
+                    }
+                }
+                else if (type === "file-start-reject") {
+                    sendingFiles.length = 0;
+                    isSendingFile = false;
+                    console.error('received file-start-reject, exit');
+                }
+                else if (type === "file-continue") {
+                    wakeupFileSending?.();
+                }
+                else if (type === "file-abort") {
+                    interruptFileSending?.();
+                }
+                else if (type === "file-end") {
+                    try {
+                        await writable.close();
+                        writable = null;
+                    } catch (e) {
+                        console.error(e.message);
+                        fileChannelSend({ type: "file-end-reject" });
+                        await writable?.abort();
+                        writable = null;
+                        return;
+                    }
+                    const file = await fileHandle.getFile();
+                    if (file.size === size) {
+                        fileChannelSend({ type: "file-end-ack", filename });
+                        return;
+                    }
+                    console.log("received corrupted file, ", filename);
+                    fileChannelSend({ type: "file-end-reject" });
+                }
+                else if (type === "file-send-error") {
+                    await writable?.abort();
+                    writable = null;
+                }
+                else if (type === "file-end-ack") {
+                    sendingFiles = sendingFiles.filter(file => file.name !== filename);
+                    if (sendingFiles.length === 0) {
+                        console.log("file sending task end");
+                        isSendingFile = false;
+                        return;
+                    }
+                    const file = sendingFiles[0];
+                    fileChannelSend({
+                        type: 'file-start',
+                        filename: file.name,
+                        size: file.size,
+                    });
+                }
+                else if (type === "file-end-reject") {
+                    sendingFiles.length = 0;
+                    isSendingFile = false;
+                    console.error('received file-end-reject, exit');
+                }
+                return;
+            }
+            // binary data
+            if (event.data instanceof ArrayBuffer) {
+                try {
+                    await writable.write(event.data);
+                } catch (e) {
+                    console.error(e.message);
+                    fileChannelSend({ type: 'file-abort' });
+                    writable?.abort();
+                    writable = null;
+                    return;
+                }
+                chunkIndex ++;
+                if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                    fileChannelSend({ type: 'file-continue' });
+                }
+            } else {
+                console.warn("received invalid type", typeof event.data);
+            }
+        };
+        fileChannel.onclose = async () => {
+            console.log("fileChannel closed");
+            if (isSendingFile) {
+                sendingFiles.length = 0;
+                isSendingFile = false;
+            }
+
+            interruptFileSending?.();
+            interruptFileSending = null;
+            wakeupFileSending = null;
+
+            writable?.abort();
+            writable = null;
+        }
+    }
+
+    async function acceptFile() {
+        document.getElementById("receiveDialog").close();
+        try {
+            dirPicker = await window.showDirectoryPicker();
+        } catch (e) {
+            console.log(e.message);
+            fileChannelSend({ type: "file-request-reject" });
+            return;
+        }
+        fileChannelSend({ type: "file-request-ack" });
+    }
+
+    function rejectFile() {
+        document.getElementById("receiveDialog").close();
+        fileChannelSend({ type: "file-request-reject" });
+    }
+
+    function heartBeatChannelInit() {
+        heartBeatChannel.onopen = () => {
+            console.log("heartBeatChannel open");
+            startHeartbeat();
+        }
+        heartBeatChannel.onmessage = e => {
+            const msg = e.data;
+            if (msg.startsWith("ping:")) {
+                heartBeatChannel.send(msg.replace("ping:", "pong:"));
+            } else if (msg.startsWith("pong:")) {
+                lastPongAt = Date.now();
+            }
+        }
+        heartBeatChannel.onclose = () => {
+            console.log("heartBeatChannel closed");
+        }
+    }
+
+    // Create offer
+    function webrtcCreateOffer() {
+        if (dataChannel || fileChannel || heartBeatChannel) {
+            restartPeerConnection(); // todo
+        }
+        console.log('webrtcCreateOffer');
+
+        // Data channel setup
+        dataChannel = peer.createDataChannel("chat");
+        dataChannelInit();
+
+        // file channel setup
+        fileChannel = peer.createDataChannel("file");
+        fileChannelInit();
+
+        // heartbeat channel setup
+        heartBeatChannel = peer.createDataChannel("heartbeat");
+        heartBeatChannelInit();
+
+        // create offer
+        peer.createOffer()
+            .then(offer => peer.setLocalDescription(offer))
+            .then(() => {
+                document.getElementById("initBtn").disabled = true;
+                sendMsg("SDP", peer.localDescription);
+            })
+            .catch(console.error);
+    }
+
+    async function addBufferedIce() {
+        while (iceBuffer.length > 0) {
+            await peer.addIceCandidate(iceBuffer.shift());
+        }
+        canAddIceCandidate = true;
+    }
+
+    function startHeartbeat() {
+        if (heartBeatInterval) {
+            return;
+        }
+        heartBeatInterval = setInterval(() => {
+            const latency = lastPongAt - lastPingAt;
+            console.log("latency: ", latency);
+            if (heartBeatChannel.readyState === "open") {
+                lastPingAt = Date.now();
+                heartBeatChannel.send("ping:" + lastPingAt);
+            } else {
+                console.error('heartBeatChannel.readyState is not open, it is ', heartBeatChannel.readyState);
+            }
+        }, 5000);
+    }
+
+    function dataChannelSend() {
+        if (!dataChannel || dataChannel.readyState !== "open") {
+            console.warn("dataChannel not open");
+            return;
+        }
+        const textContent = document.getElementById("content").value;
+        dataChannel.send(textContent);
+    }
+
+    function fileChannelSend(content) {
+        if (!fileChannel || fileChannel.readyState !== "open") {
+            console.warn("fileChannel not open");
+            return;
+        }
+        fileChannel.send(JSON.stringify(content));
+    }
+
+    function waitForFileChannelDrain(channel) {
+        if (channel.readyState !== "open") {
+            return Promise.reject(new Error("File channel closed"));
+        }
+        if (channel.bufferedAmount <= FILE_BUFFER_LOW_WATER_MARK) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+            const cleanup = () => {
+                channel.removeEventListener("bufferedamountlow", onLow);
+                channel.removeEventListener("close", onClose);
+                channel.removeEventListener("error", onError);
+            };
+            const onLow = () => {
+                cleanup();
+                resolve();
+            };
+            const onClose = () => {
+                cleanup();
+                reject(new Error("File channel closed"));
+            };
+            const onError = () => {
+                cleanup();
+                reject(new Error("File channel failed"));
+            };
+
+            channel.addEventListener("bufferedamountlow", onLow, { once: true });
+            channel.addEventListener("close", onClose, { once: true });
+            channel.addEventListener("error", onError, { once: true });
+
+            if (channel.readyState !== "open") {
+                onClose();
+            } else if (channel.bufferedAmount <= FILE_BUFFER_LOW_WATER_MARK) {
+                onLow();
+            }
+        });
+    }
+
+    async function sendSingleFile(file) {
+        isInterruptFileSending = false;
+        interruptFileSending = () => {
+            isInterruptFileSending = true;
+        }
+        for (let offset = 0, chunkIndex = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
+            if (fileChannel.readyState !== "open") {
+                throw new Error("File channel closed");
+            }
+            if (isInterruptFileSending) {
+                throw new Error("stop sending single file");
+            }
+            if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
+                console.log("fileChannel buffer is full, waiting for drain", fileChannel.bufferedAmount);
+                await waitForFileChannelDrain(fileChannel);
+            }
+            console.log('continue to send file');
+            const chunk = file.slice(offset, offset + FILE_CHUNK_SIZE);
+            fileChannel.send(await chunk.arrayBuffer());
+
+            chunkIndex ++;
+            if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                await new Promise((resolve, reject) => {
+                    wakeupFileSending = resolve;
+                    interruptFileSending = () => {
+                        isInterruptFileSending = true;
+                        reject(new Error("File transfer aborted"));
+                    }
+                });
+            }
+        }
+    }
+
+    async function sendFile() {
+        if (!fileChannel || fileChannel.readyState !== "open") {
+            console.warn("fileChannel not open");
+            return;
+        }
+        const files = document.getElementById("file").files;
+        if (files.length === 0) {
+            console.warn("No files selected");
+            return;
+        }
+        if (isSendingFile) {
+            console.warn("A file transfer is already in progress");
+            return;
+        }
+        isSendingFile = true;
+        try {
+            sendingFiles = [ ...files ];
+            let fileDetails = sendingFiles.map((file) => {
+                return { filename: file.name, size: file.size };
+            });
+            fileChannelSend({ type: "file-request", fileDetails });
+        } catch (error) {
+            console.error("File transfer failed", error);
+            isSendingFile = false;
+        }
+    }
+
+    function webRTCSwap(type, data) {
+        if (type === "PENDING_PAIR_SUCC") {
+            console.log("PENDING_PAIR_SUCC");
+        } else if (type === "PENDING_PAIR_FAIL") {
+            console.log('register pair failed');
+            clearConnHistory();
+        } else if (type === "PAIR_SUCC") {
+            console.log('pair success');
+            const { roomKey } = data;
+            localStorage.setItem('roomKey', roomKey);
+            sendMsg("JOIN_ROOM");
+        } else if (type === "PAIR_FAIL") {
+            console.log('pair failed');
+            clearConnHistory();
+        } else if (type === "JOIN_ROOM_WAIT") {
+            console.log("waiting for other clients to join the room");
+        } else if (type === "JOIN_ROOM_SUCC") {
+            const { isOfferer } = data;
+            console.log("joined room, isOfferer: ", isOfferer);
+            if (isOfferer) {
+                webrtcCreateOffer(true);
+            }
+        } else if (type === "JOIN_ROOM_FAIL") {
+            console.log('join room failed');
+            clearConnHistory();
+        } else if (type === "SDP") {
+            console.log("SDP Received, create answer");
+            document.getElementById("initBtn").disabled = true;
+            peer.setRemoteDescription(new RTCSessionDescription(data))
+                .then(addBufferedIce)
+                .then(() => peer.createAnswer())
+                .then(answer => peer.setLocalDescription(answer))
+                .then(() => sendMsg("SDP_ANSWER", peer.localDescription))
+                .catch(console.error);
+        } else if (type === "SDP_ANSWER") {
+            console.log("SDP_ANSWER Received");
+            peer.setRemoteDescription(new RTCSessionDescription(data))
+                .then(addBufferedIce)
+                .catch(console.error);
+        } else if (type === "ICE") {
+            console.log("ICE swap");
+            const candidate = new RTCIceCandidate(data);
+            if (canAddIceCandidate) {
+                peer.addIceCandidate(candidate)
+                    .catch(console.error);
+            } else {
+                iceBuffer.push(candidate);
+            }
+        }
+    }
+
+    function prepareJoinRoom() {
+        console.log("prepareJoinRoom");
+        const roomKey = localStorage.getItem('roomKey');
+        if (roomKey) {
+            sendMsg("JOIN_ROOM");
+        } else {
+            registerPairKey();
+        }
+    }
+
+    function wsInit(onopen) {
+        console.log("wsInit");
+        if (ws?.readyState === WebSocket.OPEN) {
+            onopen && onopen();
+            return;
+        }
+        ws = new WebSocket(WS_HOST);
+        ws.onopen = () => {
+            console.log("Connection opened");
+            onopen && onopen();
+        };
+        ws.onmessage = event => {
+            const { type, data } = JSON.parse(event.data);
+            console.log("Received message, type: ", type);
+            webRTCSwap(type, data);
+        }
+        ws.onerror = () => {
+            console.log("WebSocket error");
+            ws.close();
+        };
+        ws.onclose = event => {
+            console.log(`WebSocket closed, eventCode: ${event.code}, reason: ${event.reason}`);
+            setTimeout(() => {
+                wsInit(onopen);
+            }, 5000);
+        }
+    }
+
+    function sendMsg(type, data) {
+        const roomKey = localStorage.getItem('roomKey');
+        if (!data) {
+            data = {};
+        }
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type, data, roomKey }));
+        }
+    }
+
+    function initPairKey() {
+        if (crypto.randomUUID) {
+            document.getElementById("pairKey").value = crypto.randomUUID();
+        } else {
+            document.getElementById("pairKey").value = Math.random().toString(16);
+        }
+    }
+
+    function registerPairKey() {
+        const pairKey = document.getElementById("pairKey").value;
+        if (pairKey) {
+            sendMsg("PENDING_PAIR", { pairKey });
+        }
+    }
+
+    function clearConnHistory() {
+        document.getElementById("targetPairKey").value = "";
+        localStorage.clear();
+        initPairKey();
+        registerPairKey();
+    }
+
+    (function () {
+        const roomKey = localStorage.getItem("roomKey");
+        if (!roomKey) {
+            initPairKey();
+            localStorage.clear();
+        }
+
+        webrtcInit();
+        wsInit(prepareJoinRoom);
+    })();
+</script>
+</body>
+</html>
