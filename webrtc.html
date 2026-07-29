@@ -38,7 +38,7 @@
     let canAddIceCandidate = false;
     let sendingFiles = [];
     let wakeupFileSending, interruptFileSending, isInterruptFileSending;
-    let dirPicker, fileHandle, writable, chunkIndex;
+    let dirPicker;
 
     const WS_HOST = "/ws";
     const FILE_CHUNK_SIZE = 64 * 1024;
@@ -160,6 +160,7 @@
     function fileChannelInit() {
         fileChannel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
         fileChannel.binaryType = "arraybuffer";
+        let fileHandle, writable, chunkIndex;
 
         fileChannel.onopen = () => {
             console.log("fileChannel open");
@@ -276,7 +277,6 @@
             if (event.data instanceof ArrayBuffer) {
                 try {
                     await writable.write(event.data);
-                    writable = null;
                 } catch (e) {
                     console.error(e.message);
                     fileChannelSend({ type: 'file-abort' });
@@ -453,13 +453,15 @@
 
     async function sendSingleFile(file) {
         isInterruptFileSending = false;
+        interruptFileSending = () => {
+            isInterruptFileSending = true;
+        }
         for (let offset = 0, chunkIndex = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
             if (fileChannel.readyState !== "open") {
                 throw new Error("File channel closed");
             }
             if (isInterruptFileSending) {
-                console.log("stop sending single file");
-                break;
+                throw new Error("stop sending single file");
             }
             if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
                 console.log("fileChannel buffer is full, waiting for drain", fileChannel.bufferedAmount);
@@ -475,7 +477,7 @@
                     wakeupFileSending = resolve;
                     interruptFileSending = () => {
                         isInterruptFileSending = true;
-                        reject();
+                        reject(new Error("File transfer aborted"));
                     }
                 });
             }
