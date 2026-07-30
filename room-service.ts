@@ -1,22 +1,26 @@
 import {WebSocket} from 'ws';
+import fs from 'fs';
+import jwt from 'jsonwebtoken';
+
+const ROOM_KEY_TTL = '24h';
+const ROOM_KEY_PRIVATE_KEY = fs.readFileSync('cert/privkey.pem');
+const ROOM_KEY_PUBLIC_KEY = fs.readFileSync('cert/fullchain.pem');
 
 export default class RoomService {
     #roomKey2roomMap: Map<string, Room> = new Map();
     #ws2roomMap: Map<WebSocket, Room> = new Map();
 
-    constructor() {
-        setInterval(() => this.#clear(), 3600 * 1000);
-    }
-
     createRoom(): string {
-        const roomKey = crypto.randomUUID() + crypto.randomUUID();
-        const room: Room = { roomKey, wsList: [], lastConnectTime: new Date() };
-        this.#roomKey2roomMap.set(roomKey, room);
-        return roomKey;
+        return jwt.sign(
+            {},
+            ROOM_KEY_PRIVATE_KEY,
+            { algorithm: 'ES256', expiresIn: ROOM_KEY_TTL }
+        );
     }
 
     joinRoom(roomKey: string, ws: WebSocket) {
-        const room: Room = this.getRoomInfo(roomKey);
+        this.validateRoomKey(roomKey);
+        const room: Room = this.#roomKey2roomMap.get(roomKey) ?? { roomKey, wsList: [] };
         room.wsList = room.wsList.filter((item: WebSocket) => item.readyState === WebSocket.OPEN);
 
         // scenario 2, send duplicated request (same roomKey and ws) to join same room
@@ -34,11 +38,22 @@ export default class RoomService {
             throw new Error('Unable to joinRoom, room is full');
         }
         room.wsList.push(ws);
+        this.#roomKey2roomMap.set(roomKey, room);
         this.#ws2roomMap.set(ws, room);
-        room.lastConnectTime = new Date();
+    }
+
+    validateRoomKey(roomKey: string) {
+        try {
+            jwt.verify(roomKey, ROOM_KEY_PUBLIC_KEY, {
+                algorithms: ['ES256']
+            });
+        } catch {
+            throw new Error('Invalid or expired roomKey');
+        }
     }
 
     getRoomInfo(roomKey: string): Room {
+        this.validateRoomKey(roomKey);
         const room: Room | undefined = this.#roomKey2roomMap.get(roomKey);
         // scenario 1. send wrong roomKey
         if (!room) {
@@ -57,29 +72,14 @@ export default class RoomService {
         if (room) {
             room.wsList = room.wsList.filter((item: WebSocket) => item != ws);
             this.#ws2roomMap.delete(ws);
-            room.lastConnectTime = new Date();
-        }
-    }
-
-    #clear() {
-        this.#ws2roomMap.forEach((room: Room, ws: WebSocket) => {
-            if (ws.readyState !== WebSocket.OPEN) {
-                room.wsList = room.wsList.filter((item: WebSocket) => item != ws);
-                this.#ws2roomMap.delete(ws);
-            }
-        });
-        this.#roomKey2roomMap.forEach((room: Room, roomKey: string) => {
             if (room.wsList.length === 0) {
-                if (Date.now() - room.lastConnectTime.getTime() > 24 * 3600 * 1000) {
-                    this.#roomKey2roomMap.delete(roomKey);
-                }
+                this.#roomKey2roomMap.delete(room.roomKey);
             }
-        });
+        }
     }
 }
 
 type Room = {
     roomKey: string;
     wsList: WebSocket[];
-    lastConnectTime: Date;
 }

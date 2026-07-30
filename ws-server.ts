@@ -131,6 +131,15 @@ wss.on("connection", (ws: WebSocket, request) => {
     const { roomKey } = reqBody;
     if (!roomKey) {
       console.warn('roomKey is missing');
+      sendMsg(ws, 'ERROR', { error: 'roomKey is missing' });
+      return;
+    }
+    try {
+      roomService.validateRoomKey(roomKey);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : 'Invalid roomKey';
+      console.warn('roomKey validation failed', error);
+      sendMsg(ws, type === 'JOIN_ROOM' ? 'JOIN_ROOM_FAIL' : 'ERROR', { error });
       return;
     }
     if (type === 'JOIN_ROOM') {
