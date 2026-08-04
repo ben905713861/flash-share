@@ -1,6 +1,12 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { createWebSocket } from "./websocket";
-import { ConnectionStatus, FileDetail, createWebRTC } from "./webrtc";
+import {
+    ConnectionStatus,
+    FileDetail,
+    FileTransferProgress,
+    FileTransferStatus,
+    createWebRTC,
+} from "./webrtc";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -14,6 +20,15 @@ const formatBytes = (bytes: number) => {
 const makePairKey = () => {
     return crypto.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
+
+const transferStatusLabel: Record<FileTransferStatus, string> = {
+    "awaiting_approval": "Awaiting approval",
+    queued: "Queued",
+    transferring: "Transferring",
+    completed: "Completed",
+    declined: "Declined",
+    failed: "Failed",
+};
 
 export function App() {
     const [pairKey, setPairKey] = useState("");
@@ -29,6 +44,7 @@ export function App() {
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
+    const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
     const sendFileRef = useRef<(files: File[]) => void>(() => {});
@@ -98,17 +114,65 @@ export function App() {
             setIncomingFiles(fileDetails);
             setReceiveDialogOpen(true);
             addActivity(
-                `${fileDetails.length} incoming file${fileDetails.length === 1 ? "" : "s"} awaiting approval`,
+                `${fileDetails.length} incoming file${fileDetails.length === 1 ? "" : "s"} awaiting_approval`,
             );
         };
 
-        let webSocket: ReturnType<typeof createWebSocket> = createWebSocket({
+        const initFileProgress = (fileDetails: FileDetail[]) => {
+            const fileProgressList: FileTransferProgress[] = fileDetails.map(fileDetail => {
+                return {
+                    ...fileDetail,
+                    transferred: -1,
+                    status: "awaiting_approval",
+                };
+            })
+            setFileTransferProgress(fileProgressList);
+        }
+
+        const updateFileTransferProgress = (filename: string, transferred: number, status?: FileTransferStatus) => {
+            setFileTransferProgress((fileProgressList) => {
+                return fileProgressList.map(fileProgress => {
+                    if (fileProgress.filename === filename) {
+                        if (status) {
+                            if (transferred < 0) {
+                                return { ...fileProgress, status };
+                            }
+                            return { ...fileProgress, transferred, status };
+                        }
+                        if (transferred >= fileProgress.size) {
+                            status = "completed";
+                        } else {
+                            status = "transferring";
+                        }
+                        return {
+                            ...fileProgress,
+                            status,
+                            transferred: Math.min(transferred, fileProgress.size),
+                        };
+                    }
+                    return fileProgress;
+                });
+            });
+        }
+
+        const updateFileTransferStatus = (status: FileTransferStatus) => {
+            setFileTransferProgress((fileProgressList) => {
+                return fileProgressList.map(fileProgress => {
+                    if (status === "completed") {
+                        return fileProgress;
+                    }
+                    return { ...fileProgress, status };
+                });
+            });
+        }
+
+        const webSocket: ReturnType<typeof createWebSocket> = createWebSocket({
             onConnecting: () => updateStatus("connecting", "Connecting to signaling server"),
             onOpen: () => prepareJoinRoom(),
             onMessage: (type, data) => void handleSignal(type, data),
         });
 
-        let webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
+        const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
             sendSignal,
             onRestartPeerConnection: () => webSocket.restart(),
             updateStatus,
@@ -117,6 +181,9 @@ export function App() {
             fileRequestComes,
             setIsSendingFile,
             clearSelectedFiles,
+            initFileProgress,
+            updateFileTransferProgress,
+            updateFileTransferStatus,
         });
 
         sendTextRef.current = webRTC.sendText;
@@ -157,6 +224,44 @@ export function App() {
     };
 
     const readyToSend = status === "connected";
+
+    const renderTransferList = () => {
+        const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
+        if (fileTransferProgress.length === 0) {
+            return (
+                <></>
+            );
+        }
+        return (
+            <section className="transfer-task" aria-label={`${title} file transfer`}>
+                <h4>{title}</h4>
+                <ul className="transfer-file-list">
+                    {fileTransferProgress.map((file) => {
+                        const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
+                        return (
+                            <li key={file.filename}>
+                                <div className="transfer-file-summary">
+                                    <span title={file.filename}>{file.filename}</span>
+                                    <small>{formatBytes(file.size)}</small>
+                                    <strong className={`transfer-status ${file.status}`}>
+                                        {transferStatusLabel[file.status]}
+                                    </strong>
+                                </div>
+                                {(file.status === "transferring" || file.status === "completed") && (
+                                    <>
+                                        <progress value={file.transferred} max={Math.max(file.size, 1)} />
+                                        <small className="transfer-bytes">
+                                            {`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}
+                                        </small>
+                                    </>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+            </section>
+        );
+    };
 
     return (
         <main className="app-shell">
@@ -287,6 +392,7 @@ export function App() {
                                     : "Any file type. The other device chooses where to save it."}
                             </small>
                         </label>
+                        {renderTransferList()}
                         <div className="tool-footer">
                             <span>
                                 {selectedFiles.length

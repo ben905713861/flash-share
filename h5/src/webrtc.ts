@@ -5,6 +5,11 @@ const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 export type ConnectionStatus = "connecting" | "ready" | "waiting" | "connected" | "error";
 export type FileDetail = { filename: string; size: number };
+export type FileTransferProgress = {
+    transferred: number;
+    status: FileTransferStatus;
+} & FileDetail;
+export type FileTransferStatus = "awaiting_approval" | "queued" | "transferring" | "completed" | "declined" | "failed";
 
 type WebRTCOptions = {
     sendSignal: (type: string, data?: unknown) => void;
@@ -15,6 +20,9 @@ type WebRTCOptions = {
     fileRequestComes: (fileDetails: FileDetail[]) => void;
     setIsSendingFile: (value: boolean) => void;
     clearSelectedFiles: () => void;
+    initFileProgress: (fileDetails: FileDetail[]) => void;
+    updateFileTransferProgress: (filename: string, transferred: number, status?: FileTransferStatus) => void;
+    updateFileTransferStatus: (status: FileTransferStatus) => void;
 };
 
 export const createWebRTC = ({
@@ -26,6 +34,9 @@ export const createWebRTC = ({
     fileRequestComes,
     setIsSendingFile,
     clearSelectedFiles,
+    initFileProgress,
+    updateFileTransferProgress,
+    updateFileTransferStatus,
 }: WebRTCOptions) => {
     let peer: RTCPeerConnection | null = null;
     let dataChannel: RTCDataChannel | null = null;
@@ -114,6 +125,8 @@ export const createWebRTC = ({
                 await waitForFileChannelDrain(fileChannel);
             }
             fileChannel.send(await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer());
+            updateFileTransferProgress(file.name, offset + FILE_CHUNK_SIZE);
+
             chunkIndex += 1;
             if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                 await new Promise<void>((resolve, reject) => {
@@ -147,17 +160,22 @@ export const createWebRTC = ({
         channel.onopen = () => addActivity("File channel connected");
         channel.onmessage = async (event) => {
             if (typeof event.data === "string") {
-                const payload = JSON.parse(event.data);
+                const payload: { filename: string; fileDetails: FileDetail[], type: string; size: number }
+                    = JSON.parse(event.data);
                 const { type, fileDetails, filename, size } = payload;
                 if (type === "file-request") {
+                    console.log("Received file requested, fileDetails", fileDetails);
                     fileRequestComes(fileDetails);
+                    initFileProgress(fileDetails);
                 } else if (type === "file-request-ack") {
+                    updateFileTransferStatus("queued");
                     const file = sendingFiles[0];
                     if (file) {
                         fileChannelSend({ type: "file-start", filename: file.name, size: file.size });
                     }
                 } else if (type === "file-request-reject") {
                     setIsSendingFile(false);
+                    updateFileTransferStatus("declined");
                     addActivity("File request declined by the other device");
                 } else if (type === "file-start") {
                     try {
@@ -169,8 +187,10 @@ export const createWebRTC = ({
                             throw new Error("No destination folder selected");
                         }
                         chunkIndex = 0;
+                        updateFileTransferProgress(filename, 0, "transferring");
                         fileChannelSend({ type: "file-start-ack", filename });
                     } catch {
+                        updateFileTransferProgress(filename, 0, "failed");
                         fileChannelSend({ type: "file-start-reject", filename });
                     }
                 } else if (type === "file-start-ack") {
@@ -178,13 +198,15 @@ export const createWebRTC = ({
                     if (!file) {
                         return;
                     }
+                    updateFileTransferProgress(filename, 0, "transferring");
                     try {
-                        addActivity(`Sending ${file.name}`);
+                        addActivity(`Sending ${filename}`);
                         await sendSingleFile(file);
-                        fileChannelSend({ type: "file-end", filename: file.name, size: file.size });
+                        fileChannelSend({ type: "file-end", filename, size: file.size });
                     } catch {
                         sendingFiles = [];
                         setIsSendingFile(false);
+                        updateFileTransferProgress(filename, 0, "failed");
                         fileChannelSend({ type: "file-send-error", filename });
                     }
                 } else if (type === "file-continue") {
@@ -197,22 +219,28 @@ export const createWebRTC = ({
                         const received = await fileHandle?.getFile();
                         writable = undefined;
                         if (received?.size === size) {
+                            updateFileTransferProgress(filename, -1, "completed");
                             fileChannelSend({ type: "file-end-ack", filename });
                             addActivity(`Received ${filename}`);
                         } else {
-                            fileChannelSend({ type: "file-end-reject" });
+                            updateFileTransferProgress(filename, -1, "failed");
+                            fileChannelSend({ type: "file-end-reject", filename });
                         }
                     } catch {
-                        fileChannelSend({ type: "file-end-reject" });
+                        updateFileTransferProgress(filename, -1, "failed");
+                        fileChannelSend({ type: "file-end-reject", filename });
                     }
                 } else if (type === "file-end-ack") {
                     sendingFiles = sendingFiles.filter((item) => item.name !== filename);
+                    updateFileTransferProgress(filename, -1, "completed");
+                    // task completed
                     if (sendingFiles.length === 0) {
                         setIsSendingFile(false);
                         clearSelectedFiles();
                         addActivity("File transfer completed");
                     } else {
                         const file = sendingFiles[0];
+                        updateFileTransferProgress(file.name, 0, "transferring");
                         fileChannelSend({ type: "file-start", filename: file.name, size: file.size });
                     }
                 } else if (
@@ -222,6 +250,7 @@ export const createWebRTC = ({
                 ) {
                     sendingFiles = [];
                     setIsSendingFile(false);
+                    updateFileTransferProgress(filename, -1, "failed");
                 }
                 return;
             }
@@ -229,6 +258,7 @@ export const createWebRTC = ({
                 try {
                     await writable.write(event.data);
                     chunkIndex += 1;
+                    updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE);
                     if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                         fileChannelSend({ type: "file-continue" });
                     }
@@ -236,12 +266,14 @@ export const createWebRTC = ({
                     fileChannelSend({ type: "file-abort" });
                     await writable.abort();
                     writable = undefined;
+                    updateFileTransferProgress(fileHandle!.name, -1, "failed");
                 }
             }
         };
         channel.onclose = () => {
             interruptFileSending?.();
             setIsSendingFile(false);
+            updateFileTransferStatus("failed");
         };
     };
     const heartBeatChannelInit = () => {
@@ -396,10 +428,14 @@ export const createWebRTC = ({
             throw new Error("no file is selected");
         }
         sendingFiles = [...files];
+        const fileDetails: FileDetail[] = sendingFiles.map((file) => {
+            return { filename: file.name, size: file.size };
+        })
         fileChannelSend({
             type: "file-request",
-            fileDetails: sendingFiles.map((file) => ({ filename: file.name, size: file.size })),
+            fileDetails,
         });
+        initFileProgress(fileDetails);
         addActivity("Waiting for the other device to approve file transfer");
     };
 
@@ -411,14 +447,17 @@ export const createWebRTC = ({
         }
         try {
             dirPicker = await window.showDirectoryPicker();
+            updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
         } catch {
+            updateFileTransferStatus("declined");
             fileChannelSend({ type: "file-request-reject" });
         }
     };
 
     const rejectFile = () => {
         fileChannelSend({ type: "file-request-reject" });
+        updateFileTransferStatus("declined");
     }
 
     const dispose = () => {
