@@ -41,6 +41,8 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     failed: "Failed",
 };
 
+type ThemePreference = "system" | "light" | "dark";
+
 export function App() {
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
@@ -48,7 +50,33 @@ export function App() {
 
     const [status, setStatus] = useState<ConnectionStatus>("connecting");
     const [statusText, setStatusText] = useState("Connecting to signaling server");
-    const [activity, setActivity] = useState<string[]>(["Preparing secure connection"]);
+    const [activeTab, setActiveTab] = useState<"message" | "files">("message");
+    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+        const saved = localStorage.getItem("flash-share-theme");
+        return saved === "light" || saved === "dark" ? saved : "system";
+    });
+    const [systemDark, setSystemDark] = useState(false);
+
+    useEffect(() => {
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const update = () => setSystemDark(media.matches);
+        update();
+        media.addEventListener?.("change", update);
+        return () => media.removeEventListener?.("change", update);
+    }, []);
+
+    useEffect(() => {
+        const resolved = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
+        document.documentElement.dataset.theme = resolved;
+        if (themePreference === "system") {
+            localStorage.removeItem("flash-share-theme");
+        } else {
+            localStorage.setItem("flash-share-theme", themePreference);
+        }
+    }, [themePreference, systemDark]);
+
+    const resolvedTheme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
+    const toggleTheme = () => setThemePreference(resolvedTheme === "dark" ? "light" : "dark");
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -67,10 +95,8 @@ export function App() {
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
                 updateStatus("ready", "Share your code to pair a device");
-                addActivity("Pairing code registered");
             } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
                 clearConnHistory();
-                addActivity("Pairing failed. A new code is ready.");
             } else if (type === "PAIR_SUCC") {
                 localStorage.setItem("roomKey", data.roomKey);
                 updateStatus("waiting", "Pairing complete. Establishing connection");
@@ -92,9 +118,7 @@ export function App() {
             webSocket.send(type, data);
         }
 
-        const addActivity = (entry: string) => {
-            setActivity((items) => [entry, ...items].slice(0, 4));
-        }
+        const addActivity = (_entry: string) => undefined;
 
         const updateStatus = (next: ConnectionStatus, text: string) => {
             setStatus(next);
@@ -124,9 +148,6 @@ export function App() {
         const fileRequestComes = (fileDetails: FileDetail[]) => {
             setIncomingFiles(fileDetails);
             setReceiveDialogOpen(true);
-            addActivity(
-                `${fileDetails.length} incoming file${fileDetails.length === 1 ? "" : "s"} awaiting approval`,
-            );
         };
 
         const initFileProgress = (fileDetails: FileDetail[]) => {
@@ -285,86 +306,39 @@ export function App() {
         );
     };
 
-    return (
-        <main className="app-shell">
-            <header className="topbar">
-                <a className="brand" href="/" aria-label="Flash Share home">
-                    <span className="brand-mark">F</span>Flash Share
-                </a>
-                <span className="topbar-note">Private browser-to-browser transfer</span>
-            </header>
-            <section className="workspace" aria-label="Flash Share workspace">
-                <aside className="connection-panel">
-                    <div className="eyebrow">Connection</div>
-                    <h1>Send without the cloud.</h1>
-                    <p className="muted">Pair two browsers, then exchange notes and files directly.</p>
-                    <div className={`connection-state ${status}`}>
-                        <span className="status-dot" />
-                        <div>
-                            <strong>
-                                {status === "connected"
-                                    ? "Connected"
-                                    : status === "ready"
-                                      ? "Ready to pair"
-                                      : status === "waiting"
-                                        ? "Pairing"
-                                        : status === "error"
-                                          ? "Action needed"
-                                          : "Connecting"}
-                            </strong>
-                            <small>{statusText}</small>
-                        </div>
-                    </div>
-                    <label className="field-label" htmlFor="pair-key">
-                        Your pairing code
-                    </label>
-                    <div className="code-field">
-                        <input id="pair-key" readOnly value={pairKey} />
-                        <button
-                            className="icon-button"
-                            type="button"
-                            title="Copy pairing code"
-                            onClick={() => navigator.clipboard?.writeText(pairKey)}
-                        >
-                            Copy
-                        </button>
-                    </div>
-                    <label className="field-label" htmlFor="target-key">
-                        Other device's code
-                    </label>
-                    <div className="join-row">
-                        <input
-                            id="target-key"
-                            placeholder="Paste pairing code"
-                            value={targetPairKey}
-                            onChange={(event) => setTargetPairKey(event.target.value)}
-                        />
-                        <button
-                            className="primary-button"
-                            type="button"
-                            onClick={() => pairRef.current(targetPairKey)}
-                        >
-                            Pair
-                        </button>
-                    </div>
-                    <div className="activity">
-                        <span>Recent activity</span>
-                        {activity.map((entry, index) => (
-                            <p key={`${entry}-${index}`}>{entry}</p>
-                        ))}
-                    </div>
-                </aside>
-                <section className="share-panel">
-                    <div className="share-heading">
-                        <div>
-                            <div className="eyebrow">Shared space</div>
-                            <h2>Drop in what matters.</h2>
-                        </div>
-                        <span className={`compact-status ${status}`}>
-                            {readyToSend ? "Live" : "Not connected"}
-                        </span>
-                    </div>
-                    <div className="tool-block message-block">
+    const scanPairCode = async () => {
+        const Detector = (window as any).BarcodeDetector;
+        if (!Detector) {
+            alert("Camera scanning is not supported in this browser. Enter the pairing code manually.");
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            const video = document.createElement("video");
+            video.srcObject = stream;
+            await video.play();
+            const detector = new Detector({ formats: ["qr_code"] });
+            const codes = await detector.detect(video);
+            stream.getTracks().forEach((track) => track.stop());
+            if (codes[0]?.rawValue) {
+                setTargetPairKey(codes[0].rawValue);
+                pairRef.current(codes[0].rawValue);
+            }
+        } catch {
+            alert("Unable to access the camera. Enter the pairing code manually.");
+        }
+    };
+
+    const renderConnectedWorkspace = () => (
+        <section className="connected-workspace" aria-label="Shared workspace">
+            <div className="workspace-header">
+                <span className="compact-status connected">Live</span>
+            </div>
+            <nav className="workspace-tabs" aria-label="Transfer modes">
+                <button className={activeTab === "message" ? "tab active" : "tab"} onClick={() => setActiveTab("message")} type="button">Quick message</button>
+                <button className={activeTab === "files" ? "tab active" : "tab"} onClick={() => setActiveTab("files")} type="button">Files</button>
+            </nav>
+            {activeTab === "message" ? <div className="tool-block message-block">
                         <div className="tool-title">
                             <h3>Quick message</h3>
                             <span>Delivered instantly</span>
@@ -387,8 +361,7 @@ export function App() {
                                 Send message
                             </button>
                         </div>
-                    </div>
-                    <div className="tool-block">
+                    </div> : <div className="tool-block">
                         <div className="tool-title">
                             <h3>Files</h3>
                             <span>Direct, encrypted transfer</span>
@@ -431,9 +404,25 @@ export function App() {
                                 {isSendingFile ? "Awaiting approval" : "Send files"}
                             </button>
                         </div>
-                    </div>
-                </section>
-            </section>
+                    </div>}
+        </section>
+    );
+
+    return (
+        <main className="app-shell">
+            <header className="topbar"><a className="brand" href="/" aria-label="Flash Share home"><span className="brand-mark">F</span>Flash Share</a><div className="topbar-actions"><span className="topbar-note">Private browser-to-browser transfer</span><button className="theme-button" type="button" onClick={toggleTheme} title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`} aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}>{resolvedTheme === "dark" ? "Light" : "Dark"}</button></div></header>
+            {status === "connected" ? renderConnectedWorkspace() : <section className="pair-screen" aria-label="Pair devices">
+                <div className="pair-card">
+                    <div className="eyebrow">Flash Share</div>
+                    <h1>Pair a device</h1>
+                    <p className="muted">Scan the QR code or enter this pairing code on your other device.</p>
+                    <div className="qr-frame"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairKey)}`} alt="Pairing QR code" /></div>
+                    <div className="your-code"><span>Your pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
+                    <div className={`connection-state ${status}`}><span className="status-dot" /><div><strong>{status === "ready" ? "Ready to pair" : status === "waiting" ? "Pairing" : status === "error" ? "Action needed" : "Connecting"}</strong><small>{statusText}</small></div></div>
+                    <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
+                    <div className="join-row"><input id="target-key" placeholder="Pairing code" value={targetPairKey} onChange={(event) => setTargetPairKey(event.target.value)} /><button className="camera-button" type="button" title="Scan QR code" onClick={() => void scanPairCode()}>📷</button><button className="primary-button" type="button" onClick={() => pairRef.current(targetPairKey)}>Pair</button></div>
+                </div>
+            </section>}
             {isReceiveDialogOpen && (
                 <div className="modal-backdrop" role="presentation">
                     <section
