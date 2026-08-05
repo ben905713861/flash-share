@@ -11,22 +11,47 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
     let wsReconnectTimer: number | undefined;
     let disposed = false;
 
-    const init = () => {
-        if (disposed || ws?.readyState === WebSocket.OPEN) {
+    const clearReconnectTimer = () => {
+        if (wsReconnectTimer !== undefined) {
+            window.clearTimeout(wsReconnectTimer);
+            wsReconnectTimer = undefined;
+        }
+    };
+
+    const scheduleReconnect = () => {
+        if (disposed || wsReconnectTimer !== undefined) {
             return;
         }
+        wsReconnectTimer = window.setTimeout(() => {
+            wsReconnectTimer = undefined;
+            init();
+        }, 5000);
+    };
+
+    const init = () => {
+        if (disposed || ws?.readyState === WebSocket.OPEN
+                || ws?.readyState === WebSocket.CONNECTING
+                || ws?.readyState === WebSocket.CLOSING) {
+            return;
+        }
+        clearReconnectTimer();
         onConnecting();
-        ws = new WebSocket(WS_HOST);
-        ws.onopen = onOpen;
-        ws.onmessage = (event) => {
+        const socket = new WebSocket(WS_HOST);
+        ws = socket;
+        socket.onopen = () => {
+            clearReconnectTimer();
+            onOpen();
+        };
+        socket.onmessage = (event) => {
             const { type, data } = JSON.parse(event.data);
             onMessage(type, data);
         };
-        ws.onerror = () => ws?.close();
-        ws.onclose = () => {
-            if (!disposed) {
-                wsReconnectTimer = window.setTimeout(init, 5000);
+        socket.onerror = () => socket.close();
+        socket.onclose = () => {
+            if (ws === socket) {
+                ws = null;
             }
+            scheduleReconnect();
         };
     };
     const send = (type: string, data: unknown = {}) => {
@@ -34,17 +59,27 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
             ws.send(JSON.stringify({ type, data, roomKey: localStorage.getItem("roomKey") }));
         }
     };
+
     const restart = () => {
-        if (ws) {
-            ws.onclose = init;
-            ws.close();
-            ws = null;
+        clearReconnectTimer();
+        const socket = ws;
+        ws = null;
+        if (socket) {
+            socket.onclose = null;
+            socket.close();
         }
+        init();
     };
+
     const dispose = () => {
         disposed = true;
-        window.clearTimeout(wsReconnectTimer);
-        ws?.close();
+        clearReconnectTimer();
+        const socket = ws;
+        ws = null;
+        if (socket) {
+            socket.onclose = null;
+            socket.close();
+        }
     };
 
     init();
