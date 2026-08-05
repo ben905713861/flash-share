@@ -51,6 +51,8 @@ export function App() {
     const [status, setStatus] = useState<ConnectionStatus>("connecting");
     const [statusText, setStatusText] = useState("Connecting to signaling server");
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
+    const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
+    const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
         const saved = localStorage.getItem("flash-share-theme");
         return saved === "light" || saved === "dark" ? saved : "system";
@@ -76,7 +78,15 @@ export function App() {
     }, [themePreference, systemDark]);
 
     const resolvedTheme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
-    const toggleTheme = () => setThemePreference(resolvedTheme === "dark" ? "light" : "dark");
+    const toggleTheme = () => {
+        setThemePreference((current) => {
+            if (current === "system") return "light";
+            if (current === "light") return "dark";
+            return "system";
+        });
+    };
+    const themeIcon = themePreference === "system" ? "◒" : themePreference === "light" ? "☀" : "🌙";
+    const themeName = themePreference === "system" ? "Auto" : themePreference === "light" ? "Light" : "Dark";
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -208,6 +218,8 @@ export function App() {
             sendSignal,
             onRestartPeerConnection: () => webSocket.restart(),
             updateStatus,
+            onPeerConnectionState: setPeerConnectionState,
+            onHeartbeat: setHeartbeatLatency,
             addActivity,
             setUserText,
             fileRequestComes,
@@ -266,7 +278,7 @@ export function App() {
         setSelectedFiles([]);
     };
 
-    const readyToSend = status === "connected";
+    const peerStateLabel = peerConnectionState === "connected" || peerConnectionState === "completed" ? "Connected" : peerConnectionState === "checking" ? "Checking" : peerConnectionState === "disconnected" ? "Disconnected" : peerConnectionState === "failed" ? "Failed" : "Waiting";
 
     const renderTransferList = () => {
         const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
@@ -331,9 +343,6 @@ export function App() {
 
     const renderConnectedWorkspace = () => (
         <section className="connected-workspace" aria-label="Shared workspace">
-            <div className="workspace-header">
-                <span className="compact-status connected">Live</span>
-            </div>
             <nav className="workspace-tabs" aria-label="Transfer modes">
                 <button className={activeTab === "message" ? "tab active" : "tab"} onClick={() => setActiveTab("message")} type="button">Quick message</button>
                 <button className={activeTab === "files" ? "tab active" : "tab"} onClick={() => setActiveTab("files")} type="button">Files</button>
@@ -410,7 +419,20 @@ export function App() {
 
     return (
         <main className="app-shell">
-            <header className="topbar"><a className="brand" href="/" aria-label="Flash Share home"><span className="brand-mark">F</span>Flash Share</a><div className="topbar-actions"><span className="topbar-note">Private browser-to-browser transfer</span><button className="theme-button" type="button" onClick={toggleTheme} title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`} aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}>{resolvedTheme === "dark" ? "Light" : "Dark"}</button></div></header>
+            <header className="topbar">
+                <a className="brand" href="/" aria-label="Flash Share home">
+                    <span className="brand-mark">F</span>Flash Share
+                </a>
+                <div className="topbar-actions">
+                    <div className="network-stats" aria-label="Connection diagnostics">
+                        <span>Peer {peerStateLabel}</span>
+                        <span>RTT {heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
+                    </div>
+                    <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
+                        <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
+                    </button>
+                </div>
+            </header>
             {status === "connected" ? renderConnectedWorkspace() : <section className="pair-screen" aria-label="Pair devices">
                 <div className="pair-card">
                     <div className="eyebrow">Flash Share</div>

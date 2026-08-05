@@ -18,6 +18,8 @@ type WebRTCOptions = {
     sendSignal: (type: string, data?: unknown) => void;
     onRestartPeerConnection: () => void;
     updateStatus: (next: ConnectionStatus, text: string) => void;
+    onPeerConnectionState: (state: RTCIceConnectionState) => void;
+    onHeartbeat: (latency: number) => void;
     addActivity: (entry: string) => void;
     setUserText: (value: string) => void;
     fileRequestComes: (fileDetails: FileDetail[]) => void;
@@ -46,6 +48,8 @@ export const createWebRTC = ({
     sendSignal,
     onRestartPeerConnection,
     updateStatus,
+    onPeerConnectionState,
+    onHeartbeat,
     addActivity,
     setUserText,
     fileRequestComes,
@@ -317,6 +321,10 @@ export const createWebRTC = ({
             }
             if (event.data.startsWith("pong:")) {
                 lastPongAt = Date.now();
+                const sentAt = Number(event.data.slice(5));
+                if (Number.isFinite(sentAt)) {
+                    onHeartbeat(Math.max(0, lastPongAt - sentAt));
+                }
             }
         };
     };
@@ -362,6 +370,7 @@ export const createWebRTC = ({
             if (!peer) {
                 return;
             }
+            onPeerConnectionState(peer.iceConnectionState);
             if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
                 window.clearTimeout(iceDisconnectTimer);
                 updateStatus("connected", "Secure peer-to-peer connection active");
