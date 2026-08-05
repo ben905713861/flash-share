@@ -21,6 +21,17 @@ const makePairKey = () => {
     return crypto.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
 
+const hasDuplicateFilenames = (files: File[]) => {
+    const names = new Set<string>();
+    for (const file of files) {
+        if (names.has(file.name)) {
+            return true;
+        }
+        names.add(file.name);
+    }
+    return false;
+};
+
 const transferStatusLabel: Record<FileTransferStatus, string> = {
     "awaiting_approval": "Awaiting approval",
     queued: "Queued",
@@ -216,6 +227,14 @@ export function App() {
             return;
         }
         const files = Array.from(event.target.files ?? []);
+        if (hasDuplicateFilenames(files)) {
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            setSelectedFiles([]);
+            alert("Files with duplicate names cannot be selected together.");
+            return;
+        }
         setSelectedFiles(files);
     };
 
