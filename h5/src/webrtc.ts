@@ -202,7 +202,9 @@ export const createWebRTC = ({
                         });
                         writable = await fileHandle?.createWritable();
                         if (!writable) {
-                            throw new Error("No destination folder selected");
+                            updateFileTransferProgress(filename, 0, "failed");
+                            fileChannelSend({ type: "file-start-reject", filename, size });
+                            return;
                         }
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
