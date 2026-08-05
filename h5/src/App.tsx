@@ -114,7 +114,7 @@ export function App() {
             setIncomingFiles(fileDetails);
             setReceiveDialogOpen(true);
             addActivity(
-                `${fileDetails.length} incoming file${fileDetails.length === 1 ? "" : "s"} awaiting_approval`,
+                `${fileDetails.length} incoming file${fileDetails.length === 1 ? "" : "s"} awaiting approval`,
             );
         };
 
@@ -158,7 +158,7 @@ export function App() {
         const updateFileTransferStatus = (status: FileTransferStatus) => {
             setFileTransferProgress((fileProgressList) => {
                 return fileProgressList.map(fileProgress => {
-                    if (status === "completed") {
+                    if (fileProgress.status === "completed") {
                         return fileProgress;
                     }
                     return { ...fileProgress, status };

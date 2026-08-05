@@ -4,7 +4,10 @@ const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 export type ConnectionStatus = "connecting" | "ready" | "waiting" | "connected" | "error";
-export type FileDetail = { filename: string; size: number };
+export type FileDetail = {
+    filename: string;
+    size: number;
+};
 export type FileTransferProgress = {
     transferred: number;
     status: FileTransferStatus;
@@ -23,6 +26,20 @@ type WebRTCOptions = {
     initFileProgress: (fileDetails: FileDetail[]) => void;
     updateFileTransferProgress: (filename: string, transferred: number, status?: FileTransferStatus) => void;
     updateFileTransferStatus: (status: FileTransferStatus) => void;
+};
+
+type FileRequest = {
+    type: "file-request";
+    fileDetails: FileDetail[];
+} | {
+    type: "file-request-ack" | "file-request-reject" | "file-continue" | "file-abort";
+} | {
+    type: "file-start" | "file-start-ack" | "file-start-reject" | "file-end" | "file-end-ack" | "file-end-reject";
+    filename: string;
+    size: number;
+} | {
+    type: "file-send-error";
+    filename: string;
 };
 
 export const createWebRTC = ({
@@ -57,7 +74,7 @@ export const createWebRTC = ({
     let fileHandle: FileSystemFileHandle | undefined;
     let chunkIndex = 0;
 
-    const fileChannelSend = (content: unknown) => {
+    const fileChannelSend = (content: FileRequest) => {
         if (fileChannel?.readyState === "open") {
             fileChannel.send(JSON.stringify(content));
         }
@@ -160,10 +177,10 @@ export const createWebRTC = ({
         channel.onopen = () => addActivity("File channel connected");
         channel.onmessage = async (event) => {
             if (typeof event.data === "string") {
-                const payload: { filename: string; fileDetails: FileDetail[], type: string; size: number }
-                    = JSON.parse(event.data);
-                const { type, fileDetails, filename, size } = payload;
+                const payload: FileRequest = JSON.parse(event.data);
+                const { type } = payload;
                 if (type === "file-request") {
+                    const { fileDetails } = payload;
                     console.log("Received file requested, fileDetails", fileDetails);
                     fileRequestComes(fileDetails);
                     initFileProgress(fileDetails);
@@ -178,6 +195,7 @@ export const createWebRTC = ({
                     updateFileTransferStatus("declined");
                     addActivity("File request declined by the other device");
                 } else if (type === "file-start") {
+                    const { filename, size } = payload;
                     try {
                         fileHandle = await dirPicker?.getFileHandle(filename, {
                             create: true,
@@ -188,12 +206,13 @@ export const createWebRTC = ({
                         }
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
-                        fileChannelSend({ type: "file-start-ack", filename });
+                        fileChannelSend({ type: "file-start-ack", filename, size });
                     } catch {
                         updateFileTransferProgress(filename, 0, "failed");
-                        fileChannelSend({ type: "file-start-reject", filename });
+                        fileChannelSend({ type: "file-start-reject", filename, size });
                     }
                 } else if (type === "file-start-ack") {
+                    const { filename } = payload;
                     const file = sendingFiles.find((item) => item.name === filename);
                     if (!file) {
                         return;
@@ -214,25 +233,27 @@ export const createWebRTC = ({
                 } else if (type === "file-abort") {
                     interruptFileSending?.();
                 } else if (type === "file-end") {
+                    const { filename, size } = payload;
                     try {
                         await writable?.close();
                         const received = await fileHandle?.getFile();
                         writable = undefined;
                         if (received?.size === size) {
-                            updateFileTransferProgress(filename, -1, "completed");
-                            fileChannelSend({ type: "file-end-ack", filename });
+                            updateFileTransferProgress(filename, size, "completed");
+                            fileChannelSend({ type: "file-end-ack", filename, size });
                             addActivity(`Received ${filename}`);
                         } else {
                             updateFileTransferProgress(filename, -1, "failed");
-                            fileChannelSend({ type: "file-end-reject", filename });
+                            fileChannelSend({ type: "file-end-reject", filename, size });
                         }
                     } catch {
                         updateFileTransferProgress(filename, -1, "failed");
-                        fileChannelSend({ type: "file-end-reject", filename });
+                        fileChannelSend({ type: "file-end-reject", filename, size });
                     }
                 } else if (type === "file-end-ack") {
+                    const { filename, size } = payload;
                     sendingFiles = sendingFiles.filter((item) => item.name !== filename);
-                    updateFileTransferProgress(filename, -1, "completed");
+                    updateFileTransferProgress(filename, size, "completed");
                     // task completed
                     if (sendingFiles.length === 0) {
                         setIsSendingFile(false);
@@ -248,6 +269,7 @@ export const createWebRTC = ({
                     type === "file-end-reject" ||
                     type === "file-start-reject"
                 ) {
+                    const { filename } = payload;
                     sendingFiles = [];
                     setIsSendingFile(false);
                     updateFileTransferProgress(filename, -1, "failed");
@@ -442,7 +464,9 @@ export const createWebRTC = ({
     const acceptFile = async () => {
         if (!window.showDirectoryPicker) {
             addActivity("This browser cannot choose a download folder");
+            updateFileTransferStatus("declined");
             fileChannelSend({ type: "file-request-reject" });
+            alert("This browser cannot choose a download folder");
             return;
         }
         try {
