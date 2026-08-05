@@ -43,8 +43,14 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
             onOpen();
         };
         socket.onmessage = (event) => {
-            const { type, data } = JSON.parse(event.data);
-            onMessage(type, data);
+            let message: { type: string; data: unknown };
+            try {
+                message = JSON.parse(event.data) as { type: string; data: unknown };
+            } catch (error) {
+                console.warn("Ignoring malformed signaling message", error);
+                return;
+            }
+            onMessage(message.type, message.data);
         };
         socket.onerror = () => socket.close();
         socket.onclose = () => {

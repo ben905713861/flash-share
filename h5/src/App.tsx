@@ -103,7 +103,7 @@ export function App() {
 
         const clearConnHistory = () => {
             setTargetPairKey("");
-            localStorage.clear();
+            localStorage.removeItem("roomKey");
             const freshKey = makePairKey();
             setPairKey(freshKey);
             sendSignal("PENDING_PAIR", { pairKey: freshKey });
@@ -212,6 +212,9 @@ export function App() {
     }, []); // empty array: only execute 1 time when load the page
 
     const onFilesSelected = (event: ChangeEvent<HTMLInputElement>) => {
+        if (isSendingFile) {
+            return;
+        }
         const files = Array.from(event.target.files ?? []);
         setSelectedFiles(files);
     };
@@ -377,6 +380,7 @@ export function App() {
                                 ref={fileInputRef}
                                 type="file"
                                 multiple
+                                disabled={isSendingFile}
                                 onChange={onFilesSelected}
                             />
                             <strong>

@@ -177,7 +177,13 @@ export const createWebRTC = ({
         channel.onopen = () => addActivity("File channel connected");
         channel.onmessage = async (event) => {
             if (typeof event.data === "string") {
-                const payload: FileRequest = JSON.parse(event.data);
+                let payload: FileRequest;
+                try {
+                    payload = JSON.parse(event.data) as FileRequest;
+                } catch (error) {
+                    console.warn("Ignoring malformed file transfer message", error);
+                    return;
+                }
                 const { type } = payload;
                 if (type === "file-request") {
                     const { fileDetails } = payload;
