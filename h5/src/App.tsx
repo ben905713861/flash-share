@@ -100,6 +100,8 @@ export function App() {
     const sendFileRef = useRef<(files: File[]) => void>(() => {});
     const acceptFileRef = useRef<() => void>(() => {});
     const rejectFileRef = useRef<() => void>(() => {});
+    const disconnectRef = useRef<() => void>(() => {});
+    const exitSignalRef = useRef<() => void>(() => {});
     const pairRef = useRef<(targetKey: string) => void>(() => {});
 
     useEffect(() => {
@@ -107,6 +109,11 @@ export function App() {
             if (type === "PENDING_PAIR_SUCC") {
                 setWaitingForPeer(false);
                 updateStatus("ready", "Share your code to pair a device");
+            } else if (type === "EXIT") {
+                localStorage.removeItem("roomKey");
+                webRTC.dispose();
+                webSocket.dispose();
+                window.location.reload();
             } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
                 setWaitingForPeer(false);
                 clearConnHistory();
@@ -243,6 +250,11 @@ export function App() {
 
         sendTextRef.current = webRTC.sendText;
         sendFileRef.current = webRTC.sendFile;
+        exitSignalRef.current = () => sendSignal("EXIT");
+        disconnectRef.current = () => {
+            webRTC.dispose();
+            webSocket.dispose();
+        };
         acceptFileRef.current = async () => {
             setReceiveDialogOpen(false);
             await webRTC.acceptFile();
@@ -261,8 +273,7 @@ export function App() {
         }
 
         return () => {
-            webSocket.dispose();
-            webRTC.dispose();
+            disconnectRef.current();
         };
     }, []); // empty array: only execute 1 time when load the page
 
@@ -290,6 +301,18 @@ export function App() {
     };
 
     const peerStateLabel = peerConnectionState === "connected" || peerConnectionState === "completed" ? "Connected" : peerConnectionState === "checking" ? "Checking" : peerConnectionState === "disconnected" ? "Disconnected" : peerConnectionState === "failed" ? "Failed" : "Waiting";
+
+    const exitShare = () => {
+        // Send before closing the socket so the paired device can leave too.
+        const roomKey = localStorage.getItem("roomKey");
+        if (roomKey) {
+            // The signaling client attaches the current room key to every message.
+            exitSignalRef.current();
+        }
+        disconnectRef.current();
+        localStorage.removeItem("roomKey");
+        window.location.reload();
+    };
 
     const renderTransferList = () => {
         const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
@@ -437,6 +460,9 @@ export function App() {
                     <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
                     </button>
+                    <button className="exit-button secondary-button" type="button" onClick={exitShare} title="Exit and disconnect" aria-label="Exit and disconnect">
+                        <span aria-hidden="true">❌</span>
+                    </button>
                 </div>
             </header>
             {status === "connected" ? renderConnectedWorkspace() : isWaitingForPeer ? <section className="waiting-screen" aria-label="Waiting for paired device">
@@ -449,12 +475,10 @@ export function App() {
                 </div>
             </section> : <section className="pair-screen" aria-label="Pair devices">
                 <div className="pair-card">
-                    <div className="eyebrow">Flash Share</div>
                     <h1>Pair a device</h1>
-                    <p className="muted">Scan the QR code or enter this pairing code on your other device.</p>
+                    <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
                     <div className="qr-frame"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairKey)}`} alt="Pairing QR code" /></div>
-                    <div className="your-code"><span>Your pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
-                    <div className={`connection-state ${status}`}><span className="status-dot" /><div><strong>{status === "ready" ? "Ready to pair" : status === "waiting" ? "Pairing" : status === "error" ? "Action needed" : "Connecting"}</strong><small>{statusText}</small></div></div>
+                    <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
                     <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
                     <div className="join-row"><input id="target-key" placeholder="Pairing code" value={targetPairKey} onChange={(event) => setTargetPairKey(event.target.value)} /><button className="camera-button" type="button" title="Scan QR code" onClick={() => void scanPairCode()}>📷</button><button className="primary-button" type="button" onClick={() => pairRef.current(targetPairKey)}>Pair</button></div>
                 </div>
