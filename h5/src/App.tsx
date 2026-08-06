@@ -426,13 +426,13 @@ export function App() {
     return (
         <main className="app-shell">
             <header className="topbar">
-                <a className="brand" href="/" aria-label="Flash Share home">
-                    <span className="brand-mark">F</span>Flash Share
+                <a className="brand" aria-label="Flash Share home">
+                    <span className="brand-mark">F</span>
                 </a>
                 <div className="topbar-actions">
                     <div className="network-stats" aria-label="Connection diagnostics">
-                        <span>Peer {peerStateLabel}</span>
-                        <span>RTT {heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
+                        <span>{peerStateLabel}</span>
+                        <span>{heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
                     </div>
                     <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
