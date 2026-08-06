@@ -8,6 +8,7 @@
 @media (max-width: 600px) { .pair-card { padding: 28px 20px; }.connected-workspace { width: calc(100% - 32px); padding: 17px 0; }.pair-screen { min-height: calc(100vh - 60px); }.your-code { flex-wrap: wrap; }.your-code strong { min-width: 150px; }.pair-card .join-row { display: grid; grid-template-columns: 1fr 42px; }.pair-card .join-row .primary-button { grid-column: 1 / -1; width: 100%; } }
 
 .topbar-actions { display: inline-flex; align-items: center; gap: 16px; }.theme-button { height: 34px; padding: 0 11px; color: #315150; background: transparent; border: 1px solid #b9ceca; border-radius: 5px; font-size: 12px; font-weight: 700; }.theme-button:hover { background: #dcebe6; }
+.connected-workspace .minimal-tool-block { border: 0; background: transparent; padding: 24px 0; }
 .network-stats { display: inline-flex; align-items: center; gap: 10px; color: #59706f; font-size: 11px; font-variant-numeric: tabular-nums; }.network-stats span + span { padding-left: 10px; border-left: 1px solid #c8d8d3; }
 .theme-button { width: 36px; padding: 0; display: inline-grid; place-items: center; }.theme-icon { font-size: 18px; line-height: 1; }
 [data-theme="dark"] { color: #e5eeeb; background: #101b1b; }
@@ -15,9 +16,10 @@
 [data-theme="dark"] .topbar { border-color: #2b403e; }.topbar-note, [data-theme="dark"] .muted, [data-theme="dark"] .tool-title span, [data-theme="dark"] .tool-footer span, [data-theme="dark"] .drop-zone small, [data-theme="dark"] .connection-state small { color: #9bb2ad; }
 [data-theme="dark"] .brand, [data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3, [data-theme="dark"] h4 { color: #e5eeeb; }
 [data-theme="dark"] .theme-button, [data-theme="dark"] .icon-button, [data-theme="dark"] .camera-button { color: #b9d8d0; border-color: #42615c; }.theme-button:hover, [data-theme="dark"] .theme-button:hover { background: #1e3432; }
-[data-theme="dark"] .pair-card, [data-theme="dark"] .tool-block, [data-theme="dark"] .receive-dialog { border-color: #2e4844; background: #172625; box-shadow: 0 18px 50px rgb(0 0 0 / .3); }
+[data-theme="dark"] .pair-card, [data-theme="dark"] .tool-block, [data-theme="dark"] .receive-dialog { border-color: #2e4844; background: #172625; }
 [data-theme="dark"] .waiting-card { border-color: #2e4844; background: #172625; box-shadow: 0 18px 50px rgb(0 0 0 / .3); }[data-theme="dark"] .waiting-card p, [data-theme="dark"] .waiting-code span { color: #9bb2ad; }[data-theme="dark"] .waiting-code { border-color: #2e4844; }[data-theme="dark"] .waiting-code strong { color: #d7e8e3; }[data-theme="dark"] .waiting-indicator { border-color: #35534e; border-top-color: #72d0bd; }[data-theme="dark"] .waiting-indicator span { background: #72d0bd; }
 [data-theme="dark"] .your-code, [data-theme="dark"] .connection-state, [data-theme="dark"] .transfer-task { border-color: #35534e; background: #1d3331; }
+[data-theme="dark"] .connected-workspace .minimal-tool-block { border-color: transparent; background: transparent; }
 [data-theme="dark"] .your-code span, [data-theme="dark"] .field-label { color: #a9c0ba; }
 [data-theme="dark"] .join-row input, [data-theme="dark"] textarea { color: #e5eeeb; background: #10201f; border-color: #42615c; }.code-field input { background: #edf3f1; } [data-theme="dark"] .code-field input { background: #1d3331; }
 [data-theme="dark"] .drop-zone { color: #d7e8e3; border-color: #5b8b81; background: #1d3834; }.drop-zone:hover, [data-theme="dark"] .drop-zone:hover { background: #264640; }

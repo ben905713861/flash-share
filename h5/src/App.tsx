@@ -359,7 +359,7 @@ export function App() {
                 <button className={activeTab === "files" ? "tab active" : "tab"} onClick={() => setActiveTab("files")} type="button">File</button>
             </nav>
                 {activeTab === "message" ?
-                    <div className="tool-block message-block">
+                    <div className="tool-block message-block minimal-tool-block">
                         <textarea
                             value={userText}
                             onChange={(event) => {
@@ -380,7 +380,7 @@ export function App() {
                         </div>
                     </div>
                     :
-                    <div className="tool-block">
+                    <div className="tool-block file-block minimal-tool-block">
                         <label className="drop-zone" htmlFor="files">
                             <input
                                 id="files"
