@@ -481,7 +481,7 @@ export function App() {
                     <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
                     </button>
-                    {status === "connected" && (
+                    {(status === "connected" || isWaitingForPeer) && (
                     <button className="exit-button secondary-button" type="button" onClick={exitShare} title="Exit and disconnect" aria-label="Exit and disconnect">
                         <span aria-hidden="true">❌</span>
                     </button>
@@ -494,7 +494,11 @@ export function App() {
                     <div className="eyebrow">Room ready</div>
                     <h1>Waiting for the other device</h1>
                     <p>Your device has joined the room. Keep this page open while the paired device connects.</p>
-                    <div className="waiting-code"><span>Pairing code</span><strong>{pairKey}</strong></div>
+                    {pairKey && (
+                        <div className="waiting-code">
+                            <span>Pairing code</span><strong>{pairKey}</strong>
+                        </div>
+                    )}
                 </div>
             </section> : <section className="pair-screen" aria-label="Pair devices">
                 <div className="pair-card">
