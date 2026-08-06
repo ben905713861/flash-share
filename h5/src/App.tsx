@@ -53,6 +53,7 @@ export function App() {
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
+    const [isWaitingForPeer, setWaitingForPeer] = useState(false);
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
         const saved = localStorage.getItem("flash-share-theme");
         return saved === "light" || saved === "dark" ? saved : "system";
@@ -104,16 +105,20 @@ export function App() {
     useEffect(() => {
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
+                setWaitingForPeer(false);
                 updateStatus("ready", "Share your code to pair a device");
             } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
+                setWaitingForPeer(false);
                 clearConnHistory();
             } else if (type === "PAIR_SUCC") {
                 localStorage.setItem("roomKey", data.roomKey);
                 updateStatus("waiting", "Pairing complete. Establishing connection");
                 sendSignal("JOIN_ROOM");
             } else if (type === "JOIN_ROOM_WAIT") {
+                setWaitingForPeer(true);
                 updateStatus("waiting", "Waiting for the paired device");
             } else if (type === "JOIN_ROOM_SUCC") {
+                setWaitingForPeer(false);
                 await webRTC.createOffer(data);
             } else if (type === "SDP") {
                 await webRTC.sdp(data);
@@ -147,6 +152,7 @@ export function App() {
         };
 
         const clearConnHistory = () => {
+            setWaitingForPeer(false);
             setTargetPairKey("");
             localStorage.removeItem("roomKey");
             const freshKey = makePairKey();
@@ -218,7 +224,12 @@ export function App() {
             sendSignal,
             onRestartPeerConnection: () => webSocket.restart(),
             updateStatus,
-            onPeerConnectionState: setPeerConnectionState,
+            onPeerConnectionState: (nextState) => {
+                setPeerConnectionState(nextState);
+                if (nextState === "connected" || nextState === "completed") {
+                    setWaitingForPeer(false);
+                }
+            },
             onHeartbeat: setHeartbeatLatency,
             addActivity,
             setUserText,
@@ -344,14 +355,11 @@ export function App() {
     const renderConnectedWorkspace = () => (
         <section className="connected-workspace" aria-label="Shared workspace">
             <nav className="workspace-tabs" aria-label="Transfer modes">
-                <button className={activeTab === "message" ? "tab active" : "tab"} onClick={() => setActiveTab("message")} type="button">Quick message</button>
-                <button className={activeTab === "files" ? "tab active" : "tab"} onClick={() => setActiveTab("files")} type="button">Files</button>
+                <button className={activeTab === "message" ? "tab active" : "tab"} onClick={() => setActiveTab("message")} type="button">Text</button>
+                <button className={activeTab === "files" ? "tab active" : "tab"} onClick={() => setActiveTab("files")} type="button">File</button>
             </nav>
-            {activeTab === "message" ? <div className="tool-block message-block">
-                        <div className="tool-title">
-                            <h3>Quick message</h3>
-                            <span>Delivered instantly</span>
-                        </div>
+                {activeTab === "message" ?
+                    <div className="tool-block message-block">
                         <textarea
                             value={userText}
                             onChange={(event) => {
@@ -370,11 +378,9 @@ export function App() {
                                 Send message
                             </button>
                         </div>
-                    </div> : <div className="tool-block">
-                        <div className="tool-title">
-                            <h3>Files</h3>
-                            <span>Direct, encrypted transfer</span>
-                        </div>
+                    </div>
+                    :
+                    <div className="tool-block">
                         <label className="drop-zone" htmlFor="files">
                             <input
                                 id="files"
@@ -433,7 +439,15 @@ export function App() {
                     </button>
                 </div>
             </header>
-            {status === "connected" ? renderConnectedWorkspace() : <section className="pair-screen" aria-label="Pair devices">
+            {status === "connected" ? renderConnectedWorkspace() : isWaitingForPeer ? <section className="waiting-screen" aria-label="Waiting for paired device">
+                <div className="waiting-card">
+                    <div className="waiting-indicator" aria-hidden="true"><span /></div>
+                    <div className="eyebrow">Room ready</div>
+                    <h1>Waiting for the other device</h1>
+                    <p>Your device has joined the room. Keep this page open while the paired device connects.</p>
+                    <div className="waiting-code"><span>Pairing code</span><strong>{pairKey}</strong></div>
+                </div>
+            </section> : <section className="pair-screen" aria-label="Pair devices">
                 <div className="pair-card">
                     <div className="eyebrow">Flash Share</div>
                     <h1>Pair a device</h1>
