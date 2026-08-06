@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { createWebSocket } from "./websocket";
 import {
     ConnectionStatus,
@@ -42,6 +43,26 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
 };
 
 type ThemePreference = "system" | "light" | "dark";
+
+function PairingQrCode({ value }: { value: string }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !value) {
+            return;
+        }
+
+        void QRCode.toCanvas(canvas, value, {
+            width: 204,
+            margin: 1,
+            errorCorrectionLevel: "M",
+            color: { dark: "#000000", light: "#ffffff" },
+        });
+    }, [value]);
+
+    return <canvas ref={canvasRef} width="204" height="204" aria-label="Pairing QR code" role="img" />;
+}
 
 export function App() {
     const [pairKey, setPairKey] = useState("");
@@ -480,7 +501,7 @@ export function App() {
                     <h1>Pair a device</h1>
                     <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
                     {pairKey && (
-                        <div className="qr-frame"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairKey)}`} alt="Pairing QR code" /></div>
+                        <div className="qr-frame"><PairingQrCode value={pairKey} /></div>
                     )}
                     <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
                     <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
