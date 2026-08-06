@@ -460,9 +460,11 @@ export function App() {
                     <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
                     </button>
+                    {status === "connected" && (
                     <button className="exit-button secondary-button" type="button" onClick={exitShare} title="Exit and disconnect" aria-label="Exit and disconnect">
                         <span aria-hidden="true">❌</span>
                     </button>
+                    )}
                 </div>
             </header>
             {status === "connected" ? renderConnectedWorkspace() : isWaitingForPeer ? <section className="waiting-screen" aria-label="Waiting for paired device">
@@ -477,7 +479,9 @@ export function App() {
                 <div className="pair-card">
                     <h1>Pair a device</h1>
                     <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
-                    <div className="qr-frame"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairKey)}`} alt="Pairing QR code" /></div>
+                    {pairKey && (
+                        <div className="qr-frame"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(pairKey)}`} alt="Pairing QR code" /></div>
+                    )}
                     <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
                     <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
                     <div className="join-row"><input id="target-key" placeholder="Pairing code" value={targetPairKey} onChange={(event) => setTargetPairKey(event.target.value)} /><button className="camera-button" type="button" title="Scan QR code" onClick={() => void scanPairCode()}>📷</button><button className="primary-button" type="button" onClick={() => pairRef.current(targetPairKey)}>Pair</button></div>
