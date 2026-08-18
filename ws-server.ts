@@ -47,13 +47,6 @@ const wss = new WebSocketServer({
   path: "/ws",
   maxPayload: MAX_PAYLOAD_BYTES,
   perMessageDeflate: false,
-  verifyClient: ({ origin, req }, done) => {
-    if (!isAllowedOrigin(origin, req.headers.host)) {
-      done(false, 403, "WebSocket origin is not allowed");
-      return;
-    }
-    done(true);
-  }
 });
 wss.on("connection", (ws: WebSocket, request) => {
   if (wss.clients.size > MAX_CONNECTIONS) {
