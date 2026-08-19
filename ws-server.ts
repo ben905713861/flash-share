@@ -60,6 +60,7 @@ wss.on("connection", (ws: WebSocket, request) => {
       ws.close(1008, "Too many messages");
       return;
     }
+    console.log("ws received", message.toString());
     let reqBody;
     try {
       reqBody = JSON.parse(message.toString());
