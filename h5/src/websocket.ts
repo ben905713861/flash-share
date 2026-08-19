@@ -1,4 +1,4 @@
-const WS_HOST = "/ws";
+const WS_HOST = "wss://local.wxb26.click:8011/ws";
 
 type WebSocketOptions = {
     onConnecting: () => void;

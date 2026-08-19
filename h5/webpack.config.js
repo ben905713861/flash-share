@@ -9,6 +9,16 @@ module.exports = {
     filename: "app.[contenthash].js",
     clean: true
   },
+  devServer: {
+    port: 8080,
+    hot: true,
+    liveReload: true,
+    open: false,
+    historyApiFallback: true,
+    client: {
+      overlay: true
+    }
+  },
   resolve: { extensions: [".tsx", ".ts", ".js"] },
   module: {
     rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: "ts-loader" }]

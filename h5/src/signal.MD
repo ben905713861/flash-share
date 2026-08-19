@@ -1,0 +1,14 @@
+- PENDING_PAIR：注册本机配对码，还没有建立设备关系。
+- PENDING_PAIR_SUCC：注册成功，界面可以展示二维码并接受其他设备配对。
+- PENDING_PAIR_FAIL：配对码注册失败，客户端清理历史并重新生成配对码。
+- PAIR：使用对方的配对码发起配对。
+- PAIR_SUCC：服务端创建房间，并向两台设备发送同一个 roomKey。
+- PAIR_FAIL：目标配对码不存在、已失效或无法完成配对。
+- JOIN_ROOM：设备携带 roomKey 加入房间。
+- JOIN_ROOM_WAIT：当前只有一台设备进入房间。
+- JOIN_ROOM_SUCC：两台设备均已进入；服务端将第一台指定为 Offerer。
+- SDP：Offerer 发出的 WebRTC Offer。
+- SDP_ANSWER：Answerer 对 Offer 的应答。
+- ICE：双方交换 STUN 得到的网络候选地址，可以在 SDP 前后多次出现。
+- ERROR：非法消息、缺少 roomKey、设备不属于房间或转发异常。
+- EXIT：通知另一台设备退出；之后清理连接并回到初始流程。
