@@ -65,16 +65,15 @@ function PairingQrCode({ value }: { value: string }) {
 }
 
 export function App() {
+    const [page, setPage] = useState("pairPage");
+
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
     const [userText, setUserText] = useState("");
 
-    const [status, setStatus] = useState<ConnectionStatus>("connecting");
-    const [statusText, setStatusText] = useState("Connecting to signaling server");
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    const [isWaitingForPeer, setWaitingForPeer] = useState(false);
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
         const saved = localStorage.getItem("flash-share-theme");
         return saved === "light" || saved === "dark" ? saved : "system";
@@ -90,8 +89,8 @@ export function App() {
     }, []);
 
     useEffect(() => {
-        const resolved = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
-        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.theme = themePreference === "system" ?
+            (systemDark ? "dark" : "light") : themePreference;
         if (themePreference === "system") {
             localStorage.removeItem("flash-share-theme");
         } else {
@@ -128,25 +127,21 @@ export function App() {
     useEffect(() => {
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
-                setWaitingForPeer(false);
+                setPage("pairPage");
                 updateStatus("ready", "Share your code to pair a device");
-            } else if (type === "EXIT") {
-                localStorage.removeItem("roomKey");
-                webRTC.dispose();
-                webSocket.dispose();
-                window.location.reload();
             } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
-                setWaitingForPeer(false);
                 clearConnHistory();
+                setPage("pairPage");
             } else if (type === "PAIR_SUCC") {
                 localStorage.setItem("roomKey", data.roomKey);
-                updateStatus("waiting", "Pairing complete. Establishing connection");
                 sendSignal("JOIN_ROOM");
+                setPage("connectingPage");
+                updateStatus("waiting", "Pairing complete. Establishing connection");
             } else if (type === "JOIN_ROOM_WAIT") {
-                setWaitingForPeer(true);
+                setPage("joinRoomWaitPage");
                 updateStatus("waiting", "Waiting for the paired device");
             } else if (type === "JOIN_ROOM_SUCC") {
-                setWaitingForPeer(false);
+                setPage("connectingPage");
                 await webRTC.createOffer(data);
             } else if (type === "SDP") {
                 await webRTC.sdp(data);
@@ -154,6 +149,11 @@ export function App() {
                 await webRTC.sdpAnswer(data);
             } else if (type === "ICE") {
                 await webRTC.iceSwap(data);
+            } else if (type === "EXIT") {
+                localStorage.removeItem("roomKey");
+                webRTC.dispose();
+                webSocket.dispose();
+                window.location.reload();
             }
         };
 
@@ -164,8 +164,7 @@ export function App() {
         const addActivity = (_entry: string) => undefined;
 
         const updateStatus = (next: ConnectionStatus, text: string) => {
-            setStatus(next);
-            setStatusText(text);
+            console.log(next, text);
         };
 
         const prepareJoinRoom = () => {
@@ -180,7 +179,6 @@ export function App() {
         };
 
         const clearConnHistory = () => {
-            setWaitingForPeer(false);
             setTargetPairKey("");
             localStorage.removeItem("roomKey");
             const freshKey = makePairKey();
@@ -253,10 +251,10 @@ export function App() {
             onRestartPeerConnection: () => webSocket.restart(),
             updateStatus,
             onPeerConnectionState: (nextState) => {
-                setPeerConnectionState(nextState);
                 if (nextState === "connected" || nextState === "completed") {
-                    setWaitingForPeer(false);
+                    setPage("workPage");
                 }
+                setPeerConnectionState(nextState);
             },
             onHeartbeat: setHeartbeatLatency,
             addActivity,
@@ -320,8 +318,6 @@ export function App() {
         }
         setSelectedFiles([]);
     };
-
-    const peerStateLabel = peerConnectionState === "connected" || peerConnectionState === "completed" ? "Connected" : peerConnectionState === "checking" ? "Checking" : peerConnectionState === "disconnected" ? "Disconnected" : peerConnectionState === "failed" ? "Failed" : "Waiting";
 
     const exitShare = () => {
         // Send before closing the socket so the paired device can leave too.
@@ -475,43 +471,61 @@ export function App() {
                 </a>
                 <div className="topbar-actions">
                     <div className="network-stats" aria-label="Connection diagnostics">
-                        <span>{peerStateLabel}</span>
+                        <span>{peerConnectionState}</span>
                         <span>{heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
                     </div>
                     <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
                     </button>
-                    {(status === "connected" || isWaitingForPeer) && (
+                    {page !== "pairPage" && (
                     <button className="exit-button secondary-button" type="button" onClick={exitShare} title="Exit and disconnect" aria-label="Exit and disconnect">
                         <span aria-hidden="true">❌</span>
                     </button>
                     )}
                 </div>
             </header>
-            {status === "connected" ? renderConnectedWorkspace() : isWaitingForPeer ? <section className="waiting-screen" aria-label="Waiting for paired device">
-                <div className="waiting-card">
-                    <div className="waiting-indicator" aria-hidden="true"><span /></div>
-                    <div className="eyebrow">Room ready</div>
-                    <h1>Waiting for the other device</h1>
-                    <p>Your device has joined the room. Keep this page open while the paired device connects.</p>
-                    {pairKey && (
-                        <div className="waiting-code">
-                            <span>Pairing code</span><strong>{pairKey}</strong>
-                        </div>
-                    )}
-                </div>
-            </section> : <section className="pair-screen" aria-label="Pair devices">
-                <div className="pair-card">
-                    <h1>Pair a device</h1>
-                    <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
-                    {pairKey && (
-                        <div className="qr-frame"><PairingQrCode value={pairKey} /></div>
-                    )}
-                    <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
-                    <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
-                    <div className="join-row"><input id="target-key" placeholder="Pairing code" value={targetPairKey} onChange={(event) => setTargetPairKey(event.target.value)} /><button className="camera-button" type="button" title="Scan QR code" onClick={() => void scanPairCode()}>📷</button><button className="primary-button" type="button" onClick={() => pairRef.current(targetPairKey)}>Pair</button></div>
-                </div>
-            </section>}
+
+            {page === "pairPage" &&
+                <section className="pair-screen" aria-label="Pair devices">
+                    <div className="pair-card">
+                        <h1>Pair a device</h1>
+                        <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
+                        {pairKey && (
+                            <div className="qr-frame"><PairingQrCode value={pairKey} /></div>
+                        )}
+                        <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
+                        <label className="field-label" htmlFor="target-key">Enter the other device's code</label>
+                        <div className="join-row"><input id="target-key" placeholder="Pairing code" value={targetPairKey} onChange={(event) => setTargetPairKey(event.target.value)} /><button className="camera-button" type="button" title="Scan QR code" onClick={() => void scanPairCode()}>📷</button><button className="primary-button" type="button" onClick={() => pairRef.current(targetPairKey)}>Pair</button></div>
+                    </div>
+                </section>
+            }
+            {page === "joinRoomWaitPage" &&
+                <section className="waiting-screen" aria-label="Waiting for paired device">
+                    <div className="waiting-card">
+                        <div className="waiting-indicator" aria-hidden="true"><span /></div>
+                        <div className="eyebrow">Room ready</div>
+                        <h1>Waiting for the other device</h1>
+                        <p>Your device has joined the room. Keep this page open while the paired device connects.</p>
+                        {pairKey && (
+                            <div className="waiting-code">
+                                <span>Pairing code</span><strong>{pairKey}</strong>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            }
+            {page === "connectingPage" &&
+                <section className="waiting-screen" aria-label="Establishing connection">
+                    <div className="waiting-card">
+                        <div className="waiting-indicator" aria-hidden="true"><span /></div>
+                        <div className="eyebrow">Pairing complete</div>
+                        <h1>Establishing a secure connection</h1>
+                        <p>Your devices are negotiating a direct connection. Keep this page open.</p>
+                    </div>
+                </section>
+            }
+            {page === "workPage" && renderConnectedWorkspace()}
+
             {isReceiveDialogOpen && (
                 <div className="modal-backdrop" role="presentation">
                     <section
