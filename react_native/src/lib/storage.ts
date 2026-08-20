@@ -9,4 +9,7 @@ export default {
     set: (key: string, value: string) => {
         return storage.set(key, value);
     },
+    remove: (key: string) => {
+        return storage.remove(key);
+    },
 };

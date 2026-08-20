@@ -34,7 +34,7 @@ const hasDuplicateFilenames = (files: File[]) => {
 };
 
 const transferStatusLabel: Record<FileTransferStatus, string> = {
-    "awaiting_approval": "Awaiting approval",
+    awaiting_approval: "Awaiting approval",
     queued: "Queued",
     transferring: "Transferring",
     completed: "Completed",
@@ -117,8 +117,8 @@ export function App() {
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
-    const sendFileRef = useRef<(files: File[]) => void>(() => {});
-    const acceptFileRef = useRef<() => void>(() => {});
+    const sendFileRef = useRef<(files: ExpoFile[]) => void>(() => {});
+    const acceptFileRef = useRef<() => Promise<void>>(async () => {});
     const rejectFileRef = useRef<() => void>(() => {});
     const disconnectRef = useRef<() => void>(() => {});
     const exitSignalRef = useRef<() => void>(() => {});
@@ -199,46 +199,40 @@ export function App() {
                     transferred: -1,
                     status: "awaiting_approval",
                 };
-            })
+            });
             setFileTransferProgress(fileProgressList);
-        }
+        };
 
         const updateFileTransferProgress = (filename: string, transferred: number, status?: FileTransferStatus) => {
-            setFileTransferProgress((fileProgressList) => {
-                return fileProgressList.map(fileProgress => {
-                    if (fileProgress.filename === filename) {
-                        if (status) {
-                            if (transferred < 0) {
-                                return { ...fileProgress, status };
-                            }
-                            return { ...fileProgress, transferred, status };
-                        }
-                        if (transferred >= fileProgress.size) {
-                            status = "completed";
-                        } else {
-                            status = "transferring";
-                        }
-                        return {
-                            ...fileProgress,
-                            status,
-                            transferred: Math.min(transferred, fileProgress.size),
-                        };
-                    }
+            setFileTransferProgress(fileProgressList => fileProgressList.map(fileProgress => {
+                if (fileProgress.filename !== filename) {
                     return fileProgress;
-                });
-            });
-        }
+                }
+                if (status) {
+                    if (transferred < 0) {
+                        return {...fileProgress, status};
+                    }
+                    return {...fileProgress, transferred, status};
+                }
+                const nextStatus: FileTransferStatus = transferred >= fileProgress.size ? "completed" : "transferring";
+                return {
+                    ...fileProgress,
+                    status: nextStatus,
+                    transferred: Math.min(transferred, fileProgress.size),
+                };
+            }));
+        };
 
-        const updateFileTransferStatus = (status: FileTransferStatus) => {
+        const updateFileTransferStatus = (nextStatus: FileTransferStatus) => {
             setFileTransferProgress((fileProgressList) => {
                 return fileProgressList.map(fileProgress => {
                     if (fileProgress.status === "completed") {
                         return fileProgress;
                     }
-                    return { ...fileProgress, status };
+                    return { ...fileProgress, status: nextStatus };
                 });
             });
-        }
+        };
 
         const webSocket: ReturnType<typeof createWebSocket> = createWebSocket({
             onConnecting: () => updateStatus("connecting", "Connecting to signaling server"),
