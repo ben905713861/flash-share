@@ -1,22 +1,21 @@
-// The TLS certificate served by ws-server is issued for wxb26.click.
-const WS_HOST = (globalThis as any).process?.env?.EXPO_PUBLIC_WS_URL || 'wss://local.wxb26.click:8011/ws';
+import storage from "./storage"
+
+const WS_HOST = "wss://local.wxb26.click:8011/ws";
 
 type WebSocketOptions = {
-    getRoomKey: () => string | null;
     onConnecting: () => void;
     onOpen: () => void;
-    onError: (message: string) => void;
     onMessage: (type: string, data: any) => void;
 };
 
-export const createWebSocket = ({getRoomKey, onConnecting, onOpen, onError, onMessage}: WebSocketOptions) => {
+export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOptions) => {
     let ws: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
 
     const clearReconnectTimer = () => {
         if (wsReconnectTimer !== undefined) {
-            clearTimeout(wsReconnectTimer);
+            globalThis.clearTimeout(wsReconnectTimer);
             wsReconnectTimer = undefined;
         }
     };
@@ -25,14 +24,17 @@ export const createWebSocket = ({getRoomKey, onConnecting, onOpen, onError, onMe
         if (disposed || wsReconnectTimer !== undefined) {
             return;
         }
-        wsReconnectTimer = setTimeout(() => {
+        wsReconnectTimer = globalThis.setTimeout(() => {
             wsReconnectTimer = undefined;
             init();
         }, 5000);
     };
 
     const init = () => {
-        if (disposed || ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING || ws?.readyState === WebSocket.CLOSING) {
+        if (disposed
+                || ws?.readyState === WebSocket.OPEN
+                || ws?.readyState === WebSocket.CONNECTING
+                || ws?.readyState === WebSocket.CLOSING) {
             return;
         }
         clearReconnectTimer();
@@ -43,22 +45,17 @@ export const createWebSocket = ({getRoomKey, onConnecting, onOpen, onError, onMe
             clearReconnectTimer();
             onOpen();
         };
-        socket.onmessage = event => {
+        socket.onmessage = (event) => {
             let message: { type: string; data: unknown };
             try {
                 message = JSON.parse(event.data) as { type: string; data: unknown };
             } catch (error) {
-                console.warn('Ignoring malformed signaling message', error);
+                console.warn("Ignoring malformed signaling message", error);
                 return;
             }
             onMessage(message.type, message.data);
         };
-        socket.onerror = (event: any) => {
-            const message = event?.message || 'Unable to connect to signaling server';
-            console.warn('Signaling WebSocket error', message);
-            onError(message);
-            socket.close();
-        };
+        socket.onerror = () => socket.close();
         socket.onclose = () => {
             if (ws === socket) {
                 ws = null;
@@ -69,7 +66,7 @@ export const createWebSocket = ({getRoomKey, onConnecting, onOpen, onError, onMe
 
     const send = (type: string, data: unknown = {}): boolean => {
         if (ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({type, data, roomKey: getRoomKey()}));
+            ws.send(JSON.stringify({ type, data, roomKey: storage.get("roomKey") }));
             return true;
         }
         console.warn(`Signaling message not sent because WebSocket is not open: ${type}`);
@@ -99,5 +96,5 @@ export const createWebSocket = ({getRoomKey, onConnecting, onOpen, onError, onMe
     };
 
     init();
-    return {send, restart, dispose};
+    return { send, restart, dispose };
 };

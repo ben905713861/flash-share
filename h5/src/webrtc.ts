@@ -63,8 +63,8 @@ export const createWebRTC = ({
     let dataChannel: RTCDataChannel | null = null;
     let fileChannel: RTCDataChannel | null = null;
     let heartBeatChannel: RTCDataChannel | null = null;
-    let heartBeatInterval: number | undefined;
-    let iceDisconnectTimer: number | undefined;
+    let heartBeatInterval: ReturnType<typeof setInterval> | undefined;
+    let iceDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let canAddIceCandidate = false;
     let lastPingAt = Date.now();
     let lastPongAt = Date.now();
@@ -83,23 +83,26 @@ export const createWebRTC = ({
             fileChannel.send(JSON.stringify(content));
         }
     };
+
     const addBufferedIce = async () => {
         while (iceBuffer.length && peer) {
             await peer.addIceCandidate(iceBuffer.shift()!);
         }
         canAddIceCandidate = true;
     };
+
     const startHeartbeat = () => {
         if (heartBeatInterval) {
             return;
         }
-        heartBeatInterval = window.setInterval(() => {
+        heartBeatInterval = globalThis.setInterval(() => {
             if (heartBeatChannel?.readyState === "open") {
                 lastPingAt = Date.now();
                 heartBeatChannel.send(`ping:${lastPingAt}`);
             }
         }, 5000);
     };
+
     const waitForFileChannelDrain = (channel: RTCDataChannel) => {
         if (channel.readyState !== "open") {
             return Promise.reject(new Error("File channel closed"));
@@ -107,11 +110,12 @@ export const createWebRTC = ({
         if (channel.bufferedAmount <= FILE_BUFFER_LOW_WATER_MARK) {
             return Promise.resolve();
         }
+        const eventChannel = channel as any;
         return new Promise<void>((resolve, reject) => {
             const cleanup = () => {
-                channel.removeEventListener("bufferedamountlow", onLow);
-                channel.removeEventListener("close", onClose);
-                channel.removeEventListener("error", onError);
+                eventChannel.removeEventListener?.("bufferedamountlow", onLow);
+                eventChannel.removeEventListener?.("close", onClose);
+                eventChannel.removeEventListener?.("error", onError);
             };
             const onLow = () => {
                 cleanup();
@@ -125,11 +129,14 @@ export const createWebRTC = ({
                 cleanup();
                 reject(new Error("File channel failed"));
             };
-            channel.addEventListener("bufferedamountlow", onLow, { once: true });
-            channel.addEventListener("close", onClose, { once: true });
-            channel.addEventListener("error", onError, { once: true });
+            if (eventChannel.addEventListener) {
+                eventChannel.addEventListener("bufferedamountlow", onLow, {once: true});
+                eventChannel.addEventListener("close", onClose, {once: true});
+                eventChannel.addEventListener("error", onError, {once: true});
+            }
         });
     };
+
     const sendSingleFile = async (file: File) => {
         isInterruptFileSending = false;
         interruptFileSending = () => {
@@ -146,7 +153,7 @@ export const createWebRTC = ({
                 await waitForFileChannelDrain(fileChannel);
             }
             fileChannel.send(await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer());
-            updateFileTransferProgress(file.name, offset + FILE_CHUNK_SIZE);
+            updateFileTransferProgress(file.name, Math.min(offset + FILE_CHUNK_SIZE, file.size));
 
             chunkIndex += 1;
             if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
@@ -160,17 +167,19 @@ export const createWebRTC = ({
             }
         }
     };
+
     const dataChannelInit = () => {
         if (!dataChannel) {
             return;
         }
         dataChannel.onopen = () => addActivity("Message channel connected");
-        dataChannel.onmessage = (event) => {
+        dataChannel.onmessage = (event: any) => {
             setUserText(event.data);
             addActivity("Message received from paired device");
         };
         dataChannel.onclose = () => addActivity("Message channel closed");
     };
+
     const fileChannelInit = () => {
         if (!fileChannel) {
             return;
@@ -179,7 +188,7 @@ export const createWebRTC = ({
         channel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
         channel.binaryType = "arraybuffer";
         channel.onopen = () => addActivity("File channel connected");
-        channel.onmessage = async (event) => {
+        channel.onmessage = async (event: any) => {
             if (typeof event.data === "string") {
                 let payload: FileRequest;
                 try {
@@ -310,12 +319,16 @@ export const createWebRTC = ({
             updateFileTransferStatus("failed");
         };
     };
+
     const heartBeatChannelInit = () => {
         if (!heartBeatChannel) {
             return;
         }
         heartBeatChannel.onopen = startHeartbeat;
-        heartBeatChannel.onmessage = (event) => {
+        heartBeatChannel.onmessage = (event: any) => {
+            if (typeof event.data !== "string") {
+                return;
+            }
             if (event.data.startsWith("ping:")) {
                 heartBeatChannel?.send(event.data.replace("ping:", "pong:"));
             }
@@ -328,9 +341,10 @@ export const createWebRTC = ({
             }
         };
     };
+
     const restartPeerConnection = () => {
-        window.clearTimeout(iceDisconnectTimer);
-        window.clearInterval(heartBeatInterval);
+        globalThis.clearTimeout(iceDisconnectTimer);
+        globalThis.clearInterval(heartBeatInterval);
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();
@@ -341,18 +355,19 @@ export const createWebRTC = ({
         iceBuffer.length = 0;
         init();
     };
+
     const init = () => {
         peer = new RTCPeerConnection({
             iceServers: [
-                {urls: "stun:stun.l.google.com:19302"}
-            ]
+                {urls: "stun:stun.l.google.com:19302"},
+            ],
         });
-        peer.onicecandidate = (event) => {
+        peer.onicecandidate = (event: any) => {
             if (event.candidate) {
-                sendSignal("ICE", event.candidate);
+                sendSignal("ICE", event.candidate.toJSON());
             }
         };
-        peer.ondatachannel = (event) => {
+        peer.ondatachannel = (event: any) => {
             if (event.channel.label === "chat") {
                 dataChannel = event.channel;
                 dataChannelInit();
@@ -372,11 +387,11 @@ export const createWebRTC = ({
             }
             onPeerConnectionState(peer.iceConnectionState);
             if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
-                window.clearTimeout(iceDisconnectTimer);
+                globalThis.clearTimeout(iceDisconnectTimer);
                 updateStatus("connected", "Secure peer-to-peer connection active");
                 addActivity("Devices connected directly");
             } else if (peer.iceConnectionState === "disconnected") {
-                iceDisconnectTimer = window.setTimeout(() => {
+                iceDisconnectTimer = globalThis.setTimeout(() => {
                     if (peer?.iceConnectionState === "disconnected" || peer?.iceConnectionState === "failed") {
                         restartPeerConnection();
                         onRestartPeerConnection();
@@ -388,6 +403,7 @@ export const createWebRTC = ({
             }
         };
     };
+
     const createOffer = async (data: any) => {
         if (!peer) {
             return;
@@ -398,15 +414,15 @@ export const createWebRTC = ({
         if (dataChannel || fileChannel || heartBeatChannel) {
             restartPeerConnection();
         }
-        dataChannel = peer!.createDataChannel("chat");
+        dataChannel = peer.createDataChannel("chat");
         dataChannelInit();
-        fileChannel = peer!.createDataChannel("file");
+        fileChannel = peer.createDataChannel("file");
         fileChannelInit();
-        heartBeatChannel = peer!.createDataChannel("heartbeat");
+        heartBeatChannel = peer.createDataChannel("heartbeat");
         heartBeatChannelInit();
         try {
-            await peer!.setLocalDescription(await peer!.createOffer());
-            sendSignal("SDP", peer!.localDescription);
+            await peer.setLocalDescription(await peer.createOffer());
+            sendSignal("SDP", peer.localDescription);
         } catch {
             updateStatus("error", "Unable to create a peer connection");
         }
@@ -424,7 +440,7 @@ export const createWebRTC = ({
         } catch {
             updateStatus("error", "Unable to establish peer connection");
         }
-    }
+    };
 
     const sdpAnswer = async (data: any) => {
         if (!peer) {
@@ -432,7 +448,7 @@ export const createWebRTC = ({
         }
         await peer.setRemoteDescription(new RTCSessionDescription(data));
         await addBufferedIce();
-    }
+    };
 
     const iceSwap = async (data: any) => {
         const candidate = new RTCIceCandidate(data);
@@ -441,7 +457,7 @@ export const createWebRTC = ({
         } else {
             iceBuffer.push(candidate);
         }
-    }
+    };
 
     const sendText = (message: string) => {
         if (dataChannel?.readyState !== "open") {
@@ -469,7 +485,7 @@ export const createWebRTC = ({
         sendingFiles = [...files];
         const fileDetails: FileDetail[] = sendingFiles.map((file) => {
             return { filename: file.name, size: file.size };
-        })
+        });
         fileChannelSend({
             type: "file-request",
             fileDetails,
@@ -499,11 +515,11 @@ export const createWebRTC = ({
     const rejectFile = () => {
         fileChannelSend({ type: "file-request-reject" });
         updateFileTransferStatus("declined");
-    }
+    };
 
     const dispose = () => {
-        window.clearTimeout(iceDisconnectTimer);
-        window.clearInterval(heartBeatInterval);
+        globalThis.clearTimeout(iceDisconnectTimer);
+        globalThis.clearInterval(heartBeatInterval);
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();

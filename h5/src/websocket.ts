@@ -8,12 +8,12 @@ type WebSocketOptions = {
 
 export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOptions) => {
     let ws: WebSocket | null = null;
-    let wsReconnectTimer: number | undefined;
+    let wsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
 
     const clearReconnectTimer = () => {
         if (wsReconnectTimer !== undefined) {
-            window.clearTimeout(wsReconnectTimer);
+            globalThis.clearTimeout(wsReconnectTimer);
             wsReconnectTimer = undefined;
         }
     };
@@ -22,14 +22,15 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
         if (disposed || wsReconnectTimer !== undefined) {
             return;
         }
-        wsReconnectTimer = window.setTimeout(() => {
+        wsReconnectTimer = globalThis.setTimeout(() => {
             wsReconnectTimer = undefined;
             init();
         }, 5000);
     };
 
     const init = () => {
-        if (disposed || ws?.readyState === WebSocket.OPEN
+        if (disposed
+                || ws?.readyState === WebSocket.OPEN
                 || ws?.readyState === WebSocket.CONNECTING
                 || ws?.readyState === WebSocket.CLOSING) {
             return;
@@ -60,10 +61,14 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
             scheduleReconnect();
         };
     };
-    const send = (type: string, data: unknown = {}) => {
+
+    const send = (type: string, data: unknown = {}): boolean => {
         if (ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type, data, roomKey: localStorage.getItem("roomKey") }));
+            return true;
         }
+        console.warn(`Signaling message not sent because WebSocket is not open: ${type}`);
+        return false;
     };
 
     const restart = () => {

@@ -65,7 +65,6 @@ export default function HomeScreen() {
     const [activity, setActivity] = useState('');
     const [dark, setDark] = useState(false);
 
-    const roomKey = useRef<string | null>(null);
     const webRTCRef = useRef<ReturnType<typeof createWebRTC> | null>(null);
     const webSocketRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
     const sendTextRef = useRef<(text: string) => void>(() => {
@@ -197,10 +196,8 @@ export default function HomeScreen() {
         };
 
         const webSocket = createWebSocket({
-            getRoomKey: () => roomKey.current,
             onConnecting: () => updateStatus('connecting', 'Connecting to signaling server'),
             onOpen: prepareJoinRoom,
-            onError: message => updateStatus('error', `Signaling connection failed: ${message}`),
             onMessage: (type, data) => void handleSignal(type, data),
         });
         webSocketRef.current = webSocket;
@@ -373,7 +370,7 @@ export default function HomeScreen() {
             style={{color: palette.muted}}>Your device has joined the room. Keep this page open while the paired device
             connects.</Text><Text style={[s.codeValue, {color: palette.text}]}>{pairKey}</Text></View> :
         <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><Text
-            style={[s.heading, {color: palette.text}]}>Pair a device</Text><Text style={{color: palette.muted}}>Enter
+            style={[s.heading, {color: palette.text}]}>Pair a device!</Text><Text style={{color: palette.muted}}>Enter
             this pairing code on the other device.</Text><View style={s.code}><Text style={{color: palette.text}}>Pairing
             code</Text><Text style={s.codeValue}>{pairKey || 'Preparing...'}</Text></View><Text
             style={{color: palette.text}}>Other device code</Text><TextInput value={targetPairKey}
