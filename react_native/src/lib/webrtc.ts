@@ -1,5 +1,5 @@
 import {Directory, File} from "expo-file-system";
-import type {RTCIceCandidate, RTCPeerConnection} from "react-native-webrtc";
+import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "react-native-webrtc";
 
 const FILE_CHUNK_SIZE = 64 * 1024;
 const FILE_CHUNK_WINDOW = 16;
@@ -64,12 +64,6 @@ export const createWebRTC = ({
     updateFileTransferProgress,
     updateFileTransferStatus,
 }: WebRTCOptions) => {
-    const {
-        RTCIceCandidate: RTCIceCandidateClass,
-        RTCPeerConnection: RTCPeerConnectionClass,
-        RTCSessionDescription: RTCSessionDescriptionClass,
-    } = require("react-native-webrtc") as typeof import("react-native-webrtc");
-
     let peer: RTCPeerConnection | null = null;
     let dataChannel: RTCDataChannel | null = null;
     let fileChannel: RTCDataChannel | null = null;
@@ -386,7 +380,7 @@ export const createWebRTC = ({
     };
 
     const init = () => {
-        peer = new RTCPeerConnectionClass({
+        peer = new RTCPeerConnection({
             iceServers: [
                 {urls: "stun:stun.l.google.com:19302"},
             ],
@@ -462,7 +456,7 @@ export const createWebRTC = ({
             return;
         }
         try {
-            await peer.setRemoteDescription(new RTCSessionDescriptionClass(data));
+            await peer.setRemoteDescription(new RTCSessionDescription(data));
             await addBufferedIce();
             await peer.setLocalDescription(await peer.createAnswer());
             sendSignal("SDP_ANSWER", peer.localDescription);
@@ -475,12 +469,12 @@ export const createWebRTC = ({
         if (!peer) {
             return;
         }
-        await peer.setRemoteDescription(new RTCSessionDescriptionClass(data));
+        await peer.setRemoteDescription(new RTCSessionDescription(data));
         await addBufferedIce();
     };
 
     const iceSwap = async (data: any) => {
-        const candidate = new RTCIceCandidateClass(data);
+        const candidate = new RTCIceCandidate(data);
         if (canAddIceCandidate) {
             await peer?.addIceCandidate(candidate);
         } else {

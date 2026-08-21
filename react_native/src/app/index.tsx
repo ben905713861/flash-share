@@ -10,10 +10,10 @@ import {
     Text,
     TextInput,
     View,
-    useColorScheme
 } from "react-native";
 import {File} from "expo-file-system";
 import {SafeAreaView} from "react-native-safe-area-context";
+import QRCode from "react-native-qrcode-svg";
 import { createWebSocket } from "@/lib/websocket";
 import {
     ConnectionStatus,
@@ -22,7 +22,8 @@ import {
     FileTransferStatus,
     createWebRTC,
 } from "@/lib/webrtc";
-import storage from "@/lib/storage";
+import storage from "@/components/storage";
+import {ResolvedTheme, ThemeSwitcher} from "@/components/theme-switcher";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -57,8 +58,6 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     failed: "Failed",
 };
 
-type ThemePreference = "system" | "light" | "dark";
-
 export default function App() {
     const [page, setPage] = useState("pairPage");
     const [connectionSession, setConnectionSession] = useState(0);
@@ -66,6 +65,7 @@ export default function App() {
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
     const [userText, setUserText] = useState("");
+
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
@@ -74,30 +74,8 @@ export default function App() {
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
-    const systemColorScheme = useColorScheme();
-    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-        const saved = storage.get("flash-share-theme");
-        return saved === "light" || saved === "dark" ? saved : "system";
-    });
-    const systemDark = systemColorScheme === "dark";
-    const resolvedTheme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
-
-    useEffect(() => {
-        if (themePreference === "system") {
-            storage.remove("flash-share-theme");
-        } else {
-            storage.set("flash-share-theme", themePreference);
-        }
-    }, [themePreference]);
-
-    const toggleTheme = () => {
-        setThemePreference((current) => {
-            if (current === "system") return "light";
-            if (current === "light") return "dark";
-            return "system";
-        });
-    };
-    const themeIcon = themePreference === "system" ? "◒" : themePreference === "light" ? "☀" : "🌙";
+    const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+    const palette = C[resolvedTheme];
     // functions: sendText, sendFile, acceptFile, rejectFile,pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
     const sendFileRef = useRef<(files: File[]) => void>(() => {});
@@ -365,19 +343,18 @@ export default function App() {
     return <SafeAreaView style={[s.safe, {backgroundColor: palette.bg}]}><ScrollView
         contentContainerStyle={s.content}><View style={s.top}><View style={s.brand}><Text style={s.mark}>F</Text><Text
         style={[s.brandText, {color: palette.text}]}>Flash Share</Text></View><View style={s.topActions}><Text
-        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><Pressable
-        onPress={toggleTheme}><Text
-        style={s.theme}>{themeIcon}</Text></Pressable>{page !== "pairPage" &&
+        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><ThemeSwitcher
+        onThemeChange={setResolvedTheme}/>{page !== "pairPage" &&
         <Pressable onPress={exitShare}><Text style={s.exit}>×</Text></Pressable>}</View></View><View
         style={s.status}><View
         style={[s.dot, {backgroundColor:"#2f9e68"}]}/></View>{page === "workPage" ? renderConnectedWorkspace() : page === "joinRoomWaitPage" || page === "connectingPage" ?
         <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><ActivityIndicator
             color="#2f6fed"/><Text style={[s.heading, {color: palette.text}]}>Waiting for the other device</Text><Text
-            style={{color: palette.muted}}>{page === "joinRoomWaitPage" ? "Your device has joined the room. Keep this page open while the paired device connects." : "Your devices are negotiating a direct connection. Keep this page open."}</Text>{page === "joinRoomWaitPage" && <Text style={[s.codeValue, {color: palette.text}]}>{pairKey}</Text>}</View> :
+            style={{color: palette.muted}}>{page === "joinRoomWaitPage" ? "Your device has joined the room. Keep this page open while the paired device connects." : "Your devices are negotiating a direct connection. Keep this page open."}</Text>{page === "joinRoomWaitPage" && <View style={s.qrFrame}>{pairKey ? <QRCode value={pairKey} size={180} /> : <ActivityIndicator color="#2f6fed" />}</View>}</View> :
         <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><Text
             style={[s.heading, {color: palette.text}]}>Pair a device!</Text><Text style={{color: palette.muted}}>Enter
             this pairing code on the other device.</Text><View style={s.code}><Text style={{color: palette.text}}>Pairing
-            code</Text><Text style={s.codeValue}>{pairKey || "Preparing..."}</Text></View><Text
+            code</Text><View style={s.qrFrame}>{pairKey ? <QRCode value={pairKey} size={180} /> : <ActivityIndicator color="#2f6fed" />}</View><Text style={s.codeValue}>{pairKey || "Preparing..."}</Text></View><Text
             style={{color: palette.text}}>Other device code</Text><TextInput value={targetPairKey}
                                                                              onChangeText={setTargetPairKey}
                                                                              placeholder="Pairing code"
@@ -424,6 +401,7 @@ const s = StyleSheet.create({
     card: {marginTop: 30, padding: 24, borderRadius: 14, borderWidth: 1, gap: 16},
     heading: {fontSize: 25, fontWeight: "700"},
     code: {alignItems: "center", padding: 18, backgroundColor: "#eef3ff", borderRadius: 10},
+    qrFrame: {width: 196, height: 196, marginTop: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderRadius: 8},
     codeValue: {fontSize: 22, fontWeight: "700", marginTop: 5},
     input: {minHeight: 48, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16},
     primary: {

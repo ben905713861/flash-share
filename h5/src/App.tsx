@@ -9,6 +9,7 @@ import {
     createWebRTC,
 } from "./webrtc";
 import storage from "./lib/storage";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -20,7 +21,7 @@ const formatBytes = (bytes: number) => {
 };
 
 const makePairKey = () => {
-    return crypto.randomUUID?.() ?? Math.random().toString(16).slice(2);
+    return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
 
 const hasDuplicateFilenames = (files: File[]) => {
@@ -42,8 +43,6 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     declined: "Declined",
     failed: "Failed",
 };
-
-type ThemePreference = "system" | "light" | "dark";
 
 function PairingQrCode({ value }: { value: string }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -76,40 +75,6 @@ export function App() {
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-        const saved = storage.get("flash-share-theme");
-        return saved === "light" || saved === "dark" ? saved : "system";
-    });
-    const [systemDark, setSystemDark] = useState(false);
-
-    useEffect(() => {
-        const media = window.matchMedia("(prefers-color-scheme: dark)");
-        const update = () => setSystemDark(media.matches);
-        update();
-        media.addEventListener?.("change", update);
-        return () => media.removeEventListener?.("change", update);
-    }, []);
-
-    useEffect(() => {
-        document.documentElement.dataset.theme = themePreference === "system" ?
-            (systemDark ? "dark" : "light") : themePreference;
-        if (themePreference === "system") {
-            storage.remove("flash-share-theme");
-        } else {
-            storage.set("flash-share-theme", themePreference);
-        }
-    }, [themePreference, systemDark]);
-
-    const resolvedTheme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
-    const toggleTheme = () => {
-        setThemePreference((current) => {
-            if (current === "system") return "light";
-            if (current === "light") return "dark";
-            return "system";
-        });
-    };
-    const themeIcon = themePreference === "system" ? "◒" : themePreference === "light" ? "☀" : "🌙";
-    const themeName = themePreference === "system" ? "Auto" : themePreference === "light" ? "Light" : "Dark";
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -478,13 +443,7 @@ export function App() {
                         <span>{peerConnectionState}</span>
                         <span>{heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
                     </div>
-                    <button className={`theme-button ${resolvedTheme}`}
-                            type="button"
-                            onClick={toggleTheme}
-                            title={`Theme: ${themeName}. Click to switch.`}
-                            aria-label={`Theme: ${themeName}. Click to switch.`}>
-                        <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
-                    </button>
+                    <ThemeSwitcher />
                     {page !== "pairPage" && (
                     <button className="exit-button secondary-button" type="button" onClick={exitShare} title="Exit and disconnect" aria-label="Exit and disconnect">
                         <span aria-hidden="true">❌</span>

@@ -1,4 +1,4 @@
-import storage from "./storage"
+import storage from "../components/storage"
 
 const WS_HOST = "wss://local.wxb26.click:8011/ws";
 
