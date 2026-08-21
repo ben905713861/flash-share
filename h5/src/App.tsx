@@ -1,12 +1,12 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { createWebSocket } from "./websocket";
+import { createWebSocket } from "./lib/websocket";
 import {
     ConnectionStatus,
     FileDetail,
     FileTransferProgress,
     FileTransferStatus,
     createWebRTC,
-} from "./webrtc";
+} from "./lib/webrtc";
 import storage from "./lib/storage";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import QRCode from "./components/qr-code";
