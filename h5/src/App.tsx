@@ -1,15 +1,15 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { createWebSocket } from "./lib/websocket";
+import QRCode from "@/components/qr-code";
+import { createWebSocket } from "@/lib/websocket";
 import {
     ConnectionStatus,
     FileDetail,
     FileTransferProgress,
     FileTransferStatus,
     createWebRTC,
-} from "./lib/webrtc";
-import storage from "./lib/storage";
-import { ThemeSwitcher } from "./components/ThemeSwitcher";
-import QRCode from "./components/qr-code";
+} from "@/lib/webrtc";
+import storage from "@/components/storage";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {

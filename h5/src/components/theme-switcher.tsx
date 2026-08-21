@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import storage from "../lib/storage";
+import storage from "./storage";
 
 type ThemePreference = "system" | "light" | "dark";
 

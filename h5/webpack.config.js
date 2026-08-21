@@ -19,7 +19,12 @@ module.exports = {
       overlay: true
     }
   },
-  resolve: { extensions: [".tsx", ".ts", ".js"] },
+  resolve: {
+    extensions: [".tsx", ".ts", ".js"],
+    alias: {
+      "@": path.resolve(__dirname, "src")
+    }
+  },
   module: {
     rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: "ts-loader" }]
   },

@@ -24,7 +24,7 @@ import {
     createWebRTC,
 } from "@/lib/webrtc";
 import storage from "@/components/storage";
-import {ThemeSwitcher} from "@/components/theme-switcher";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
