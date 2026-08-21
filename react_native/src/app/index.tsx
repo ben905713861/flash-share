@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -6,14 +6,13 @@ import {
     Platform,
     Pressable,
     ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     useColorScheme,
     View,
 } from "react-native";
-import {File} from "expo-file-system";
-import {SafeAreaView} from "react-native-safe-area-context";
+import { File } from "expo-file-system";
+import { SafeAreaView } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 import { createWebSocket } from "@/lib/websocket";
 import {
@@ -25,6 +24,7 @@ import {
 } from "@/lib/webrtc";
 import storage from "@/components/storage";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { C, s } from "./styles";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -306,159 +306,284 @@ export default function App() {
                 <></>
             );
         }
-        return <View style={[s.transferTask, {borderColor: palette.border}]}><Text
-            style={[s.transferTitle, {color: palette.text}]}>{title}</Text>{fileTransferProgress.map(file => {
-            const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
-            return <View key={file.filename} style={s.transferFile}><View style={s.transferSummary}><Text
-                numberOfLines={1} style={[s.transferName, {color: palette.text}]}>{file.filename}</Text><Text
-                style={{color: palette.muted}}>{formatBytes(file.size)}</Text><Text
-                style={[s.transferStatus, {color: palette.muted}]}>{transferStatusLabel[file.status]}</Text></View>{(file.status === "transferring" || file.status === "completed") && <>
-                <View style={s.progressTrack}><View
-                    style={[s.progressValue, {width: `${Math.max(0, Math.min(percent, 100))}%`}]}/></View><Text
-                style={{color: palette.muted}}>{`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}</Text></>}
-            </View>;
-        })}</View>;
+        return (
+            <View style={[s.transferTask, { borderColor: palette.border }]}>
+                <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
+                {fileTransferProgress.map((file) => {
+                    const percent =
+                        file.size === 0
+                            ? 100
+                            : Math.round((file.transferred / file.size) * 100);
+                    return (
+                        <View key={file.filename} style={s.transferFile}>
+                            <View style={s.transferSummary}>
+                                <Text
+                                    numberOfLines={1}
+                                    style={[s.transferName, { color: palette.text }]}
+                                >
+                                    {file.filename}
+                                </Text>
+                                <Text style={{ color: palette.muted }}>
+                                    {formatBytes(file.size)}
+                                </Text>
+                                <Text style={[s.transferStatus, { color: palette.muted }]}>
+                                    {transferStatusLabel[file.status]}
+                                </Text>
+                            </View>
+                            {(file.status === "transferring" ||
+                                file.status === "completed") && (
+                                <>
+                                    <View style={s.progressTrack}>
+                                        <View
+                                            style={[
+                                                s.progressValue,
+                                                { width: `${Math.max(0, Math.min(percent, 100))}%` },
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text
+                                        style={{ color: palette.muted }}
+                                    >{`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}</Text>
+                                </>
+                            )}
+                        </View>
+                    );
+                })}
+            </View>
+        );
     };
 
-    const renderConnectedWorkspace = () => <View style={s.workspace}><View style={s.tabs}><Pressable
-        style={[s.tab, activeTab === "message" && s.activeTab]} onPress={() => setActiveTab("message")}><Text
-        style={s.tabText}>Text</Text></Pressable><Pressable style={[s.tab, activeTab === "files" && s.activeTab]}
-                                                            onPress={() => setActiveTab("files")}><Text
-        style={s.tabText}>File</Text></Pressable></View>{activeTab === "message" ?
-        <View style={s.toolBlock}><TextInput multiline value={userText} onChangeText={setUserText}
-                                             placeholder="Write a note for the other device..."
-                                             placeholderTextColor={palette.muted} style={[s.messageInput, {
-            color: palette.text,
-            borderColor: palette.border
-        }]}/><View style={s.footer}><Text style={{color: palette.muted}}>{userText.length} characters</Text><Pressable
-            style={s.primary} disabled={!userText.trim()} onPress={() => sendTextRef.current(userText)}><Text style={s.primaryText}>Send
-            message</Text></Pressable></View></View> :
-        <View style={s.toolBlock}><Pressable style={[s.filePicker, {borderColor: palette.border}]}
-                                             disabled={isSendingFile} onPress={() => void onFilesSelected()}><Text
-            style={[s.filePickerTitle, {color: palette.text}]}>{selectedFiles.length ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected` : "Choose files to share"}</Text><Text
-            style={{color: palette.muted}}>{selectedFiles.length ? selectedFiles.map(file => `${file.name} (${formatBytes(file.size)})`).join(" · ") : "Any file type. The other device chooses where to save it."}</Text></Pressable>{renderTransferList()}<View
-            style={s.footer}><Text
-            style={{color: palette.muted}}>{selectedFiles.length ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready` : "No files selected"}</Text><Pressable
-            style={s.primary} disabled={!selectedFiles.length || isSendingFile} onPress={() => sendFileRef.current(selectedFiles)}><Text
-            style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text></Pressable></View></View>}
-    </View>;
+    const renderConnectedWorkspace = () => (
+        <View style={s.workspace}>
+            <View style={s.tabs}>
+                <Pressable
+                    accessibilityRole="tab"
+                    style={[s.tab, activeTab === "message" && s.activeTab]}
+                    onPress={() => setActiveTab("message")}
+                >
+                    <Text style={s.tabText}>Text</Text>
+                </Pressable>
+                <Pressable
+                    accessibilityRole="tab"
+                    style={[s.tab, activeTab === "files" && s.activeTab]}
+                    onPress={() => setActiveTab("files")}
+                >
+                    <Text style={s.tabText}>File</Text>
+                </Pressable>
+            </View>
+            {activeTab === "message" ? (
+                <View style={s.toolBlock}>
+                    <TextInput
+                        multiline
+                        value={userText}
+                        onChangeText={setUserText}
+                        placeholder="Write a note for the other device..."
+                        placeholderTextColor={palette.muted}
+                        style={[
+                            s.messageInput,
+                            { color: palette.text, borderColor: palette.border },
+                        ]}
+                    />
+                    <View style={s.footer}>
+                        <Text style={{ color: palette.muted }}>
+                            {userText.length} characters
+                        </Text>
+                        <Pressable
+                            style={[s.primary, !userText.trim() && s.disabled]}
+                            disabled={!userText.trim()}
+                            onPress={() => sendTextRef.current(userText)}
+                        >
+                            <Text style={s.primaryText}>Send message</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            ) : (
+                <View style={s.toolBlock}>
+                    <Pressable
+                        style={[s.filePicker, { borderColor: palette.border }]}
+                        disabled={isSendingFile}
+                        onPress={() => void onFilesSelected()}
+                    >
+                        <Text style={[s.filePickerTitle, { color: palette.text }]}>
+                            {selectedFiles.length
+                                ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected`
+                                : "Choose files to share"}
+                        </Text>
+                        <Text style={{ color: palette.muted }}>
+                            {selectedFiles.length
+                                ? selectedFiles
+                                        .map((file) => `${file.name} (${formatBytes(file.size)})`)
+                                        .join(" · ")
+                                : "Any file type. The other device chooses where to save it."}
+                        </Text>
+                    </Pressable>
+                    {renderTransferList()}
+                    <View style={s.footer}>
+                        <Text style={{ color: palette.muted }}>
+                            {selectedFiles.length
+                                ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready`
+                                : "No files selected"}
+                        </Text>
+                        <Pressable
+                            style={[
+                                s.primary,
+                                (!selectedFiles.length || isSendingFile) && s.disabled,
+                            ]}
+                            disabled={!selectedFiles.length || isSendingFile}
+                            onPress={() => sendFileRef.current(selectedFiles)}
+                        >
+                            <Text style={s.primaryText}>
+                                {isSendingFile ? "Awaiting approval" : "Send files"}
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+            )}
+        </View>
+    );
 
-    return <SafeAreaView style={[s.safe, {backgroundColor: palette.bg}]}><ScrollView
-        contentContainerStyle={s.content}><View style={s.top}><View style={s.brand}><Text style={s.mark}>F</Text><Text
-        style={[s.brandText, {color: palette.text}]}>Flash Share</Text></View><View style={s.topActions}><Text
-        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><ThemeSwitcher/>{page !== "pairPage" &&
-        <Pressable onPress={exitShare}><Text style={s.exit}>×</Text></Pressable>}</View></View><View
-        style={s.status}><View
-        style={[s.dot, {backgroundColor:"#2f9e68"}]}/></View>{page === "workPage" ? renderConnectedWorkspace() : page === "joinRoomWaitPage" || page === "connectingPage" ?
-        <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><ActivityIndicator
-            color="#2f6fed"/><Text style={[s.heading, {color: palette.text}]}>Waiting for the other device</Text><Text
-            style={{color: palette.muted}}>{page === "joinRoomWaitPage" ? "Your device has joined the room. Keep this page open while the paired device connects." : "Your devices are negotiating a direct connection. Keep this page open."}</Text>{page === "joinRoomWaitPage" && <View style={s.qrFrame}>{pairKey ? <QRCode value={pairKey} size={180} /> : <ActivityIndicator color="#2f6fed" />}</View>}</View> :
-        <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><Text
-            style={[s.heading, {color: palette.text}]}>Pair a device!</Text><Text style={{color: palette.muted}}>Enter
-            this pairing code on the other device.</Text><View style={s.code}><Text style={{color: palette.text}}>Pairing
-            code</Text><View style={s.qrFrame}>{pairKey ? <QRCode value={pairKey} size={180} /> : <ActivityIndicator color="#2f6fed" />}</View><Text style={s.codeValue}>{pairKey || "Preparing..."}</Text></View><Text
-            style={{color: palette.text}}>Other device code</Text><TextInput value={targetPairKey}
-                                                                             onChangeText={setTargetPairKey}
-                                                                             placeholder="Pairing code"
-                                                                             placeholderTextColor={palette.muted}
-                                                                             style={[s.input, {
-                                                                                 color: palette.text,
-                                                                                 borderColor: palette.border
-                                                                             }]}/><Pressable style={s.primary}
-                                                                                             onPress={() => pairRef.current(targetPairKey)}><Text
-            style={s.primaryText}>Pair</Text></Pressable></View>}</ScrollView><Modal transparent
-                                                                                          visible={isReceiveDialogOpen}
-                                                                                          animationType="fade"
-                                                                                          onRequestClose={() => rejectFileRef.current()}><View
-        style={s.modalBackdrop}><View
-        style={[s.dialog, {backgroundColor: palette.card, borderColor: palette.border}]}><Text
-        style={[s.heading, {color: palette.text}]}>Incoming files</Text><Text style={{color: palette.muted}}>The paired
-        device wants to
-        send {incomingFiles.length} file{incomingFiles.length <= 1 ? "" : "s"}.</Text>{incomingFiles.map(file => <View
-        style={s.incomingFile} key={file.filename}><Text style={{color: palette.text}}>{file.filename}</Text><Text
-        style={{color: palette.muted}}>{formatBytes(file.size)}</Text></View>)}<View style={s.footer}><Pressable
-        style={s.secondary} onPress={() => rejectFileRef.current()}><Text
-        style={s.secondaryText}>Decline</Text></Pressable><Pressable style={s.primary}
-                                                                     onPress={() => void acceptFileRef.current()}><Text
-        style={s.primaryText}>Choose folder & receive</Text></Pressable></View></View></View></Modal></SafeAreaView>;
+    return (
+        <SafeAreaView style={[s.safe, { backgroundColor: palette.bg }]}>
+            <ScrollView contentContainerStyle={s.content}>
+                <View style={s.top}>
+                    <View style={s.brand}>
+                        <Text style={s.mark}>F</Text>
+                        <Text style={[s.brandText, { color: palette.text }]}>
+                            Flash Share
+                        </Text>
+                    </View>
+                    <View style={s.topActions}>
+                        <Text style={{ color: palette.muted }}>
+                            {peerConnectionState}{" "}
+                            {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}
+                        </Text>
+                        <ThemeSwitcher />
+                        {page !== "pairPage" && (
+                            <Pressable accessibilityLabel="Exit sharing" onPress={exitShare}>
+                                <Text style={s.exit}>×</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
+                {page === "workPage" ? (
+                    renderConnectedWorkspace()
+                ) : page === "joinRoomWaitPage" || page === "connectingPage" ? (
+                    <View
+                        style={[
+                            s.card,
+                            { backgroundColor: palette.card, borderColor: palette.border },
+                        ]}
+                    >
+                        <ActivityIndicator color="#2f6fed" />
+                        <Text style={[s.heading, { color: palette.text }]}>
+                            Waiting for the other device
+                        </Text>
+                        <Text style={{ color: palette.muted }}>
+                            {page === "joinRoomWaitPage"
+                                ? "Your device has joined the room. Keep this page open while the paired device connects."
+                                : "Your devices are negotiating a direct connection. Keep this page open."}
+                        </Text>
+                        {page === "joinRoomWaitPage" && (
+                            <View style={s.qrFrame}>
+                                {pairKey ? (
+                                    <QRCode value={pairKey} size={180} />
+                                ) : (
+                                    <ActivityIndicator color="#2f6fed" />
+                                )}
+                            </View>
+                        )}
+                    </View>
+                ) : (
+                    <View
+                        style={[
+                            s.card,
+                            { backgroundColor: palette.card, borderColor: palette.border },
+                        ]}
+                    >
+                        <Text style={[s.heading, { color: palette.text }]}>
+                            Pair a device!
+                        </Text>
+                        <Text style={{ color: palette.muted }}>
+                            Enter this pairing code on the other device.
+                        </Text>
+                        <View style={s.code}>
+                            <Text style={{ color: palette.text }}>Pairing code</Text>
+                            <View style={s.qrFrame}>
+                                {pairKey ? (
+                                    <QRCode value={pairKey} size={180} />
+                                ) : (
+                                    <ActivityIndicator color="#2f6fed" />
+                                )}
+                            </View>
+                            <Text style={[s.codeValue, { color: palette.text }]}>
+                                {pairKey || "Preparing..."}
+                            </Text>
+                        </View>
+                        <Text style={{ color: palette.text }}>Other device code</Text>
+                        <TextInput
+                            value={targetPairKey}
+                            onChangeText={setTargetPairKey}
+                            placeholder="Pairing code"
+                            placeholderTextColor={palette.muted}
+                            style={[
+                                s.input,
+                                { color: palette.text, borderColor: palette.border },
+                            ]}
+                        />
+                        <Pressable
+                            style={s.primary}
+                            onPress={() => pairRef.current(targetPairKey)}
+                        >
+                            <Text style={s.primaryText}>Pair</Text>
+                        </Pressable>
+                    </View>
+                )}
+            </ScrollView>
+            <Modal
+                transparent
+                visible={isReceiveDialogOpen}
+                animationType="fade"
+                onRequestClose={() => rejectFileRef.current()}
+            >
+                <View style={s.modalBackdrop}>
+                    <View
+                        style={[
+                            s.dialog,
+                            { backgroundColor: palette.card, borderColor: palette.border },
+                        ]}
+                    >
+                        <Text style={[s.heading, { color: palette.text }]}>
+                            Incoming files
+                        </Text>
+                        <Text style={{ color: palette.muted }}>
+                            The paired device wants to send {incomingFiles.length} file
+                            {incomingFiles.length <= 1 ? "" : "s"}.
+                        </Text>
+                        {incomingFiles.map((file) => (
+                            <View style={s.incomingFile} key={file.filename}>
+                                <Text style={{ color: palette.text }}>{file.filename}</Text>
+                                <Text style={{ color: palette.muted }}>
+                                    {formatBytes(file.size)}
+                                </Text>
+                            </View>
+                        ))}
+                        <View style={s.footer}>
+                            <Pressable
+                                style={s.secondary}
+                                onPress={() => rejectFileRef.current()}
+                            >
+                                <Text style={s.secondaryText}>Decline</Text>
+                            </Pressable>
+                            <Pressable
+                                style={s.primary}
+                                onPress={() => void acceptFileRef.current()}
+                            >
+                                <Text style={s.primaryText}>Choose folder & receive</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </SafeAreaView>
+    );
 }
-
-const C = {
-    light: {bg: "#f5f6f8", card: "#fff", text: "#18212b", muted: "#687482", border: "#d9dee5"},
-    dark: {bg: "#12161b", card: "#1b222a", text: "#f0f3f6", muted: "#a1acb8", border: "#34404d"},
-};
-
-const s = StyleSheet.create({
-    safe: {flex: 1},
-    content: {width: "100%", maxWidth: 720, alignSelf: "center", padding: 24, gap: 20},
-    top: {flexDirection: "row", justifyContent: "space-between", alignItems: "center"},
-    topActions: {flexDirection: "row", alignItems: "center", gap: 10},
-    brand: {flexDirection: "row", alignItems: "center", gap: 10},
-    mark: {backgroundColor: "#2f6fed", color: "#fff", fontSize: 22, fontWeight: "800", padding: 8, borderRadius: 8},
-    brandText: {fontSize: 20, fontWeight: "700"},
-    theme: {fontSize: 22, padding: 8},
-    exit: {fontSize: 28, color: "#d9534f", paddingHorizontal: 8},
-    status: {flexDirection: "row", alignItems: "center", gap: 8},
-    dot: {width: 9, height: 9, borderRadius: 5},
-    card: {marginTop: 30, padding: 24, borderRadius: 14, borderWidth: 1, gap: 16},
-    heading: {fontSize: 25, fontWeight: "700"},
-    code: {alignItems: "center", padding: 18, backgroundColor: "#eef3ff", borderRadius: 10},
-    qrFrame: {width: 196, height: 196, marginTop: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderRadius: 8},
-    codeValue: {fontSize: 22, fontWeight: "700", marginTop: 5},
-    input: {minHeight: 48, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 16},
-    primary: {
-        backgroundColor: "#2f6fed",
-        minHeight: 48,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 20
-    },
-    primaryText: {color: "#fff", fontWeight: "700", fontSize: 16},
-    secondary: {
-        minHeight: 48,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: "#9aa4af",
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 20
-    },
-    secondaryText: {color: "#52606d", fontWeight: "700", fontSize: 16},
-    workspace: {marginTop: 20, gap: 14},
-    tabs: {flexDirection: "row", gap: 8},
-    tab: {paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8, backgroundColor: "#e8edf4"},
-    activeTab: {backgroundColor: "#d8e5ff"},
-    tabText: {color: "#334155", fontWeight: "700"},
-    toolBlock: {gap: 14},
-    messageInput: {
-        minHeight: 180,
-        borderWidth: 1,
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        textAlignVertical: "top"
-    },
-    footer: {flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12},
-    filePicker: {
-        minHeight: 130,
-        borderWidth: 1,
-        borderStyle: "dashed",
-        borderRadius: 8,
-        padding: 18,
-        justifyContent: "center",
-        gap: 8
-    },
-    filePickerTitle: {fontWeight: "700", fontSize: 16},
-    transferTask: {borderWidth: 1, borderRadius: 8, padding: 14, gap: 12},
-    transferTitle: {fontWeight: "700", fontSize: 16},
-    transferFile: {gap: 5},
-    transferSummary: {gap: 4},
-    transferName: {fontWeight: "600"},
-    transferStatus: {fontWeight: "600"},
-    progressTrack: {height: 6, backgroundColor: "#d9dee5", borderRadius: 3, overflow: "hidden"},
-    progressValue: {height: 6, backgroundColor: "#2f6fed"},
-    incomingFile: {paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#d9dee5", gap: 3},
-    modalBackdrop: {flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24},
-    dialog: {borderRadius: 14, borderWidth: 1, padding: 22, gap: 16},
-});
