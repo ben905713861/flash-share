@@ -1,3 +1,5 @@
+import storage from "./lib/storage";
+
 const WS_HOST = "wss://local.wxb26.click:8011/ws";
 
 type WebSocketOptions = {
@@ -64,7 +66,7 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
 
     const send = (type: string, data: unknown = {}): boolean => {
         if (ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type, data, roomKey: localStorage.getItem("roomKey") }));
+            ws.send(JSON.stringify({ type, data, roomKey: storage.get("roomKey") }));
             return true;
         }
         console.warn(`Signaling message not sent because WebSocket is not open: ${type}`);

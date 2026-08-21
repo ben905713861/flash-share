@@ -8,6 +8,7 @@ import {
     FileTransferStatus,
     createWebRTC,
 } from "./webrtc";
+import storage from "./lib/storage";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -66,6 +67,7 @@ function PairingQrCode({ value }: { value: string }) {
 
 export function App() {
     const [page, setPage] = useState("pairPage");
+    const [connectionSession, setConnectionSession] = useState(0);
 
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
@@ -75,7 +77,7 @@ export function App() {
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
-        const saved = localStorage.getItem("flash-share-theme");
+        const saved = storage.get("flash-share-theme");
         return saved === "light" || saved === "dark" ? saved : "system";
     });
     const [systemDark, setSystemDark] = useState(false);
@@ -92,9 +94,9 @@ export function App() {
         document.documentElement.dataset.theme = themePreference === "system" ?
             (systemDark ? "dark" : "light") : themePreference;
         if (themePreference === "system") {
-            localStorage.removeItem("flash-share-theme");
+            storage.remove("flash-share-theme");
         } else {
-            localStorage.setItem("flash-share-theme", themePreference);
+            storage.set("flash-share-theme", themePreference);
         }
     }, [themePreference, systemDark]);
 
@@ -117,7 +119,7 @@ export function App() {
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
-    const sendFileRef = useRef<(files: ExpoFile[]) => void>(() => {});
+    const sendFileRef = useRef<(files: File[]) => void>(() => {});
     const acceptFileRef = useRef<() => Promise<void>>(async () => {});
     const rejectFileRef = useRef<() => void>(() => {});
     const disconnectRef = useRef<() => void>(() => {});
@@ -133,7 +135,7 @@ export function App() {
                 clearConnHistory();
                 setPage("pairPage");
             } else if (type === "PAIR_SUCC") {
-                localStorage.setItem("roomKey", data.roomKey);
+                storage.set("roomKey", data.roomKey);
                 sendSignal("JOIN_ROOM");
                 setPage("connectingPage");
                 updateStatus("waiting", "Pairing complete. Establishing connection");
@@ -150,7 +152,7 @@ export function App() {
             } else if (type === "ICE") {
                 await webRTC.iceSwap(data);
             } else if (type === "EXIT") {
-                localStorage.removeItem("roomKey");
+                storage.remove("roomKey");
                 webRTC.dispose();
                 webSocket.dispose();
                 window.location.reload();
@@ -159,7 +161,7 @@ export function App() {
 
         const sendSignal = (type: string, data: unknown = {}) => {
             webSocket.send(type, data);
-        }
+        };
 
         const addActivity = (_entry: string) => undefined;
 
@@ -168,7 +170,7 @@ export function App() {
         };
 
         const prepareJoinRoom = () => {
-            const roomKey = localStorage.getItem("roomKey");
+            const roomKey = storage.get("roomKey");
             if (roomKey) {
                 sendSignal("JOIN_ROOM");
             } else {
@@ -180,7 +182,8 @@ export function App() {
 
         const clearConnHistory = () => {
             setTargetPairKey("");
-            localStorage.removeItem("roomKey");
+            storage.remove("roomKey");
+            setPage("pairPage");
             const freshKey = makePairKey();
             setPairKey(freshKey);
             sendSignal("PENDING_PAIR", { pairKey: freshKey });
@@ -204,32 +207,38 @@ export function App() {
         };
 
         const updateFileTransferProgress = (filename: string, transferred: number, status?: FileTransferStatus) => {
-            setFileTransferProgress(fileProgressList => fileProgressList.map(fileProgress => {
-                if (fileProgress.filename !== filename) {
-                    return fileProgress;
-                }
-                if (status) {
-                    if (transferred < 0) {
-                        return {...fileProgress, status};
+            setFileTransferProgress((fileProgressList) => {
+                return fileProgressList.map(fileProgress => {
+                    if (fileProgress.filename === filename) {
+                        if (status) {
+                            if (transferred < 0) {
+                                return { ...fileProgress, status };
+                            }
+                            return { ...fileProgress, transferred, status };
+                        }
+                        if (transferred >= fileProgress.size) {
+                            status = "completed";
+                        } else {
+                            status = "transferring";
+                        }
+                        return {
+                            ...fileProgress,
+                            status,
+                            transferred: Math.min(transferred, fileProgress.size),
+                        };
                     }
-                    return {...fileProgress, transferred, status};
-                }
-                const nextStatus: FileTransferStatus = transferred >= fileProgress.size ? "completed" : "transferring";
-                return {
-                    ...fileProgress,
-                    status: nextStatus,
-                    transferred: Math.min(transferred, fileProgress.size),
-                };
-            }));
+                    return fileProgress;
+                });
+            });
         };
 
-        const updateFileTransferStatus = (nextStatus: FileTransferStatus) => {
+        const updateFileTransferStatus = (status: FileTransferStatus) => {
             setFileTransferProgress((fileProgressList) => {
                 return fileProgressList.map(fileProgress => {
                     if (fileProgress.status === "completed") {
                         return fileProgress;
                     }
-                    return { ...fileProgress, status: nextStatus };
+                    return { ...fileProgress, status };
                 });
             });
         };
@@ -288,7 +297,7 @@ export function App() {
         return () => {
             disconnectRef.current();
         };
-    }, []); // empty array: only execute 1 time when load the page
+    }, [connectionSession]); // empty array: only execute 1 time when load the page
 
     const onFilesSelected = (event: ChangeEvent<HTMLInputElement>) => {
         if (isSendingFile) {
@@ -315,14 +324,16 @@ export function App() {
 
     const exitShare = () => {
         // Send before closing the socket so the paired device can leave too.
-        const roomKey = localStorage.getItem("roomKey");
+        const roomKey = storage.get("roomKey");
         if (roomKey) {
             // The signaling client attaches the current room key to every message.
             exitSignalRef.current();
         }
         disconnectRef.current();
-        localStorage.removeItem("roomKey");
-        window.location.reload();
+        storage.remove("roomKey");
+        setPage("pairPage");
+        setTargetPairKey("");
+        setConnectionSession((current) => current + 1);
     };
 
     const renderTransferList = () => {
