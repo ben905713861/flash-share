@@ -34,7 +34,7 @@ const formatBytes = (bytes: number) => {
 };
 
 const makePairKey = () => {
-    return crypto.randomUUID?.() ?? Math.random().toString(16).slice(2);
+    return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
 
 const hasDuplicateFilenames = (files: File[]) => {
@@ -109,7 +109,7 @@ export default function App() {
 
     useEffect(() => {
         if (Platform.OS === "web") {
-            console.error("WebRTC requires an Android or iOS development build");
+            globalThis.alert("WebRTC requires an Android or iOS development build");
             return;
         }
 
@@ -138,10 +138,7 @@ export default function App() {
             } else if (type === "ICE") {
                 await webRTC.iceSwap(data);
             } else if (type === "EXIT") {
-                storage.remove("roomKey");
-                setTargetPairKey("");
-                setPage("pairPage");
-                setConnectionSession((current) => current + 1);
+                restartSession();
             }
         };
 
@@ -312,20 +309,14 @@ export default function App() {
             // The signaling client attaches the current room key to every message.
             exitSignalRef.current();
         }
-        disconnectRef.current();
-        storage.remove("roomKey");
-        setPage("pairPage");
-        setTargetPairKey("");
-        setConnectionSession((current) => current + 1);
+        restartSession();
     };
 
-    setPage("pairPage");
-    setTargetPairKey("");
-    setConnectionSession((current) => current + 1);
-
-    // React Native event adapters for the shared send/pair refs.
-
-    const palette = resolvedTheme === "dark" ? C.dark : C.light;
+    const restartSession = () => {
+        storage.remove("roomKey");
+        setPage("pairPage");
+        setConnectionSession((current) => current + 1);
+    };
 
     const renderTransferList = () => {
         const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";

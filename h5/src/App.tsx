@@ -152,10 +152,7 @@ export function App() {
             } else if (type === "ICE") {
                 await webRTC.iceSwap(data);
             } else if (type === "EXIT") {
-                storage.remove("roomKey");
-                webRTC.dispose();
-                webSocket.dispose();
-                window.location.reload();
+                restartSession();
             }
         };
 
@@ -329,10 +326,12 @@ export function App() {
             // The signaling client attaches the current room key to every message.
             exitSignalRef.current();
         }
-        disconnectRef.current();
+        restartSession();
+    };
+
+    const restartSession = () => {
         storage.remove("roomKey");
         setPage("pairPage");
-        setTargetPairKey("");
         setConnectionSession((current) => current + 1);
     };
 
@@ -479,7 +478,11 @@ export function App() {
                         <span>{peerConnectionState}</span>
                         <span>{heartbeatLatency === null ? "--" : `${heartbeatLatency} ms`}</span>
                     </div>
-                    <button className={`theme-button ${resolvedTheme}`} type="button" onClick={toggleTheme} title={`Theme: ${themeName}. Click to switch.`} aria-label={`Theme: ${themeName}. Click to switch.`}>
+                    <button className={`theme-button ${resolvedTheme}`}
+                            type="button"
+                            onClick={toggleTheme}
+                            title={`Theme: ${themeName}. Click to switch.`}
+                            aria-label={`Theme: ${themeName}. Click to switch.`}>
                         <span className="theme-icon" aria-hidden="true">{themeIcon}</span>
                     </button>
                     {page !== "pairPage" && (
