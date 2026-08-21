@@ -9,12 +9,19 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View
+    View,
+    useColorScheme
 } from "react-native";
-import {File as ExpoFile} from "expo-file-system";
+import {File} from "expo-file-system";
 import {SafeAreaView} from "react-native-safe-area-context";
-import {createWebRTC, ConnectionStatus, FileDetail, FileTransferProgress, FileTransferStatus} from "@/lib/webrtc";
-import {createWebSocket} from "@/lib/websocket";
+import { createWebSocket } from "@/lib/websocket";
+import {
+    ConnectionStatus,
+    FileDetail,
+    FileTransferProgress,
+    FileTransferStatus,
+    createWebRTC,
+} from "@/lib/webrtc";
 import storage from "@/lib/storage";
 
 const formatBytes = (bytes: number) => {
@@ -30,7 +37,7 @@ const makePairKey = () => {
     return crypto.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
 
-const hasDuplicateFilenames = (files: ExpoFile[]) => {
+const hasDuplicateFilenames = (files: File[]) => {
     const names = new Set<string>();
     for (const file of files) {
         if (names.has(file.name)) {
@@ -50,69 +57,128 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     failed: "Failed",
 };
 
-export default function HomeScreen() {
+type ThemePreference = "system" | "light" | "dark";
+
+export default function App() {
     const [page, setPage] = useState("pairPage");
+    const [connectionSession, setConnectionSession] = useState(0);
 
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
     const [userText, setUserText] = useState("");
-    const [status, setStatus] = useState<ConnectionStatus>("connecting");
-    const [statusText, setStatusText] = useState("Connecting to signaling server");
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    const [selectedFiles, setSelectedFiles] = useState<ExpoFile[]>([]);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
-    const [dark, setDark] = useState(false);
-    const roomKey = useRef<string | null>(storage.get("roomKey") ?? null);
+    const systemColorScheme = useColorScheme();
+    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+        const saved = storage.get("flash-share-theme");
+        return saved === "light" || saved === "dark" ? saved : "system";
+    });
+    const systemDark = systemColorScheme === "dark";
+    const resolvedTheme = themePreference === "system" ? (systemDark ? "dark" : "light") : themePreference;
 
-    const webRTCRef = useRef<ReturnType<typeof createWebRTC> | null>(null);
-    const webSocketRef = useRef<ReturnType<typeof createWebSocket> | null>(null);
+    useEffect(() => {
+        if (themePreference === "system") {
+            storage.remove("flash-share-theme");
+        } else {
+            storage.set("flash-share-theme", themePreference);
+        }
+    }, [themePreference]);
+
+    const toggleTheme = () => {
+        setThemePreference((current) => {
+            if (current === "system") return "light";
+            if (current === "light") return "dark";
+            return "system";
+        });
+    };
+    const themeIcon = themePreference === "system" ? "◒" : themePreference === "light" ? "☀" : "🌙";
+    // functions: sendText, sendFile, acceptFile, rejectFile,pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
-    const sendFileRef = useRef<(files: ExpoFile[]) => void>(() => {});
+    const sendFileRef = useRef<(files: File[]) => void>(() => {});
     const acceptFileRef = useRef<() => Promise<void>>(async () => {});
     const rejectFileRef = useRef<() => void>(() => {});
     const disconnectRef = useRef<() => void>(() => {});
     const exitSignalRef = useRef<() => void>(() => {});
     const pairRef = useRef<(targetKey: string) => void>(() => {});
-    const updateStatus = (next: ConnectionStatus, text: string) => {
-        setStatus(next);
-        setStatusText(text);
-    };
 
     useEffect(() => {
         if (Platform.OS === "web") {
-            setStatus("error");
-            setStatusText("WebRTC requires an Android or iOS development build");
+            console.error("WebRTC requires an Android or iOS development build");
             return;
         }
 
+        const handleSignal = async (type: string, data: any) => {
+            if (type === "PENDING_PAIR_SUCC") {
+                setPage("pairPage");
+                updateStatus("ready", "Share your code to pair a device");
+            } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
+                clearConnHistory();
+                setPage("pairPage");
+            } else if (type === "PAIR_SUCC") {
+                storage.set("roomKey", data.roomKey);
+                sendSignal("JOIN_ROOM");
+                setPage("connectingPage");
+                updateStatus("waiting", "Pairing complete. Establishing connection");
+            } else if (type === "JOIN_ROOM_WAIT") {
+                setPage("joinRoomWaitPage");
+                updateStatus("waiting", "Waiting for the paired device");
+            } else if (type === "JOIN_ROOM_SUCC") {
+                setPage("connectingPage");
+                await webRTC.createOffer(data);
+            } else if (type === "SDP") {
+                await webRTC.sdp(data);
+            } else if (type === "SDP_ANSWER") {
+                await webRTC.sdpAnswer(data);
+            } else if (type === "ICE") {
+                await webRTC.iceSwap(data);
+            } else if (type === "EXIT") {
+                storage.remove("roomKey");
+                setTargetPairKey("");
+                setPage("pairPage");
+                setConnectionSession((current) => current + 1);
+            }
+        };
+
         const sendSignal = (type: string, data: unknown = {}) => {
-            webSocketRef.current?.send(type, data);
+            webSocket.send(type, data);
+        };
+
+        const addActivity = (_entry: string) => undefined;
+
+        const updateStatus = (next: ConnectionStatus, text: string) => {
+            console.log(next, text);
         };
 
         const prepareJoinRoom = () => {
-            if (roomKey.current) {
+            const roomKey = storage.get("roomKey");
+            if (roomKey) {
                 sendSignal("JOIN_ROOM");
             } else {
                 const key = makePairKey();
                 setPairKey(key);
-                sendSignal("PENDING_PAIR", {pairKey: key});
+                sendSignal("PENDING_PAIR", { pairKey: key });
             }
         };
 
         const clearConnHistory = () => {
             setTargetPairKey("");
-            roomKey.current = null;
             storage.remove("roomKey");
             setPage("pairPage");
             const freshKey = makePairKey();
             setPairKey(freshKey);
             sendSignal("PENDING_PAIR", { pairKey: freshKey });
             updateStatus("ready", "Ready to pair with another device");
+        };
+
+        const fileRequestComes = (fileDetails: FileDetail[]) => {
+            setIncomingFiles(fileDetails);
+            setReceiveDialogOpen(true);
         };
 
         const initFileProgress = (fileDetails: FileDetail[]) => {
@@ -127,99 +193,60 @@ export default function HomeScreen() {
         };
 
         const updateFileTransferProgress = (filename: string, transferred: number, status?: FileTransferStatus) => {
-            setFileTransferProgress(fileProgressList => fileProgressList.map(fileProgress => {
-                if (fileProgress.filename !== filename) {
-                    return fileProgress;
-                }
-                if (status) {
-                    if (transferred < 0) {
-                        return {...fileProgress, status};
+            setFileTransferProgress((fileProgressList) => {
+                return fileProgressList.map(fileProgress => {
+                    if (fileProgress.filename === filename) {
+                        if (status) {
+                            if (transferred < 0) {
+                                return { ...fileProgress, status };
+                            }
+                            return { ...fileProgress, transferred, status };
+                        }
+                        if (transferred >= fileProgress.size) {
+                            status = "completed";
+                        } else {
+                            status = "transferring";
+                        }
+                        return {
+                            ...fileProgress,
+                            status,
+                            transferred: Math.min(transferred, fileProgress.size),
+                        };
                     }
-                    return {...fileProgress, transferred, status};
-                }
-                const nextStatus: FileTransferStatus = transferred >= fileProgress.size ? "completed" : "transferring";
-                return {
-                    ...fileProgress,
-                    status: nextStatus,
-                    transferred: Math.min(transferred, fileProgress.size),
-                };
-            }));
+                    return fileProgress;
+                });
+            });
         };
 
-        const updateFileTransferStatus = (nextStatus: FileTransferStatus) => {
+        const updateFileTransferStatus = (status: FileTransferStatus) => {
             setFileTransferProgress((fileProgressList) => {
                 return fileProgressList.map(fileProgress => {
                     if (fileProgress.status === "completed") {
                         return fileProgress;
                     }
-                    return { ...fileProgress, status: nextStatus };
+                    return { ...fileProgress, status };
                 });
             });
         };
 
-        const fileRequestComes = (fileDetails: FileDetail[]) => {
-            setIncomingFiles(fileDetails);
-            setReceiveDialogOpen(true);
-        };
-
-        const clearSelectedFiles = () => {
-            setSelectedFiles([]);
-        };
-
-        const handleSignal = async (type: string, data: any) => {
-            if (type === "PENDING_PAIR_SUCC") {
-                setPage("pairPage");
-                updateStatus("ready", "Share your code to pair a device");
-            } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
-                clearConnHistory();
-            } else if (type === "PAIR_SUCC") {
-                roomKey.current = data.roomKey;
-                storage.set("roomKey", data.roomKey);
-                sendSignal("JOIN_ROOM");
-                setPage("connectingPage");
-                updateStatus("waiting", "Pairing complete. Establishing connection");
-            } else if (type === "JOIN_ROOM_WAIT") {
-                setPage("joinRoomWaitPage");
-                updateStatus("waiting", "Waiting for the paired device");
-            } else if (type === "JOIN_ROOM_SUCC") {
-                setPage("connectingPage");
-                await webRTCRef.current?.createOffer(data);
-            } else if (type === "SDP") {
-                await webRTCRef.current?.sdp(data);
-            } else if (type === "SDP_ANSWER") {
-                await webRTCRef.current?.sdpAnswer(data);
-            } else if (type === "ICE") {
-                await webRTCRef.current?.iceSwap(data);
-            } else if (type === "EXIT") {
-                roomKey.current = null;
-                storage.remove("roomKey");
-                webRTCRef.current?.dispose();
-                webSocketRef.current?.dispose();
-                setPage("pairPage");
-                setTargetPairKey("");
-                updateStatus("ready", "Ready to pair with another device");
-            }
-        };
-
-        const webSocket = createWebSocket({
+        const webSocket: ReturnType<typeof createWebSocket> = createWebSocket({
             onConnecting: () => updateStatus("connecting", "Connecting to signaling server"),
-            onOpen: prepareJoinRoom,
+            onOpen: () => prepareJoinRoom(),
             onMessage: (type, data) => void handleSignal(type, data),
         });
-        webSocketRef.current = webSocket;
 
-        const webRTC = createWebRTC({
+        const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
             sendSignal,
             onRestartPeerConnection: () => webSocket.restart(),
             updateStatus,
-            onPeerConnectionState: nextState => {
+            onPeerConnectionState: (nextState) => {
                 if (nextState === "connected" || nextState === "completed") {
                     setPage("workPage");
                 }
                 setPeerConnectionState(nextState);
             },
             onHeartbeat: setHeartbeatLatency,
-            addActivity: (_entry: string) => undefined,
+            addActivity,
             setUserText,
             fileRequestComes,
             setIsSendingFile,
@@ -228,7 +255,6 @@ export default function HomeScreen() {
             updateFileTransferProgress,
             updateFileTransferStatus,
         });
-        webRTCRef.current = webRTC;
 
         sendTextRef.current = webRTC.sendText;
         sendFileRef.current = webRTC.sendFile;
@@ -250,27 +276,20 @@ export default function HomeScreen() {
                 updateStatus("error", "Enter the other device's pairing code");
                 return;
             }
-            const sent = webSocketRef.current?.send("PAIR", { targetPairKey: targetKey.trim() }) ?? false;
-            if (!sent) {
-                updateStatus("error", "Signaling server is not connected yet. Please wait and try again.");
-                return;
-            }
+            sendSignal("PAIR", { targetPairKey: targetKey.trim() });
             updateStatus("waiting", "Requesting a secure pairing");
-        };
+        }
 
         return () => {
-            webRTC.dispose();
-            webSocket.dispose();
-            webRTCRef.current = null;
-            webSocketRef.current = null;
+            disconnectRef.current();
         };
-    }, []);
+    }, [connectionSession]); // empty array: only execute 1 time when load the page
 
     const onFilesSelected = async () => {
         if (isSendingFile) {
             return;
         }
-        const result = await ExpoFile.pickFileAsync({multipleFiles: true});
+        const result = await File.pickFileAsync({multipleFiles: true});
         if (result.canceled) {
             return;
         }
@@ -282,43 +301,31 @@ export default function HomeScreen() {
         setSelectedFiles(result.result);
     };
 
-    const pair = () => pairRef.current(targetPairKey);
-
-    const sendText = () => {
-        if (!userText.trim()) {
-            return;
-        }
-        sendTextRef.current(userText);
-    };
-
-    const sendFiles = () => {
-        if (selectedFiles.length > 0) {
-            sendFileRef.current(selectedFiles);
-        }
+    const clearSelectedFiles = () => {
+        setSelectedFiles([]);
     };
 
     const exitShare = () => {
         // Send before closing the socket so the paired device can leave too.
-        exitSignalRef.current();
+        const roomKey = storage.get("roomKey");
+        if (roomKey) {
+            // The signaling client attaches the current room key to every message.
+            exitSignalRef.current();
+        }
         disconnectRef.current();
-        roomKey.current = null;
         storage.remove("roomKey");
         setPage("pairPage");
         setTargetPairKey("");
-        setPairKey(makePairKey());
-        updateStatus("ready", "Ready to pair with another device");
+        setConnectionSession((current) => current + 1);
     };
 
-    const palette = dark ? C.dark : C.light;
-    const peerStateLabel = peerConnectionState === "connected" || peerConnectionState === "completed"
-        ? "Connected"
-        : peerConnectionState === "checking"
-            ? "Checking"
-            : peerConnectionState === "disconnected"
-                ? "Disconnected"
-                : peerConnectionState === "failed"
-                    ? "Failed"
-                    : "Waiting";
+    setPage("pairPage");
+    setTargetPairKey("");
+    setConnectionSession((current) => current + 1);
+
+    // React Native event adapters for the shared send/pair refs.
+
+    const palette = resolvedTheme === "dark" ? C.dark : C.light;
 
     const renderTransferList = () => {
         const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
@@ -352,7 +359,7 @@ export default function HomeScreen() {
             color: palette.text,
             borderColor: palette.border
         }]}/><View style={s.footer}><Text style={{color: palette.muted}}>{userText.length} characters</Text><Pressable
-            style={s.primary} disabled={!userText.trim()} onPress={sendText}><Text style={s.primaryText}>Send
+            style={s.primary} disabled={!userText.trim()} onPress={() => sendTextRef.current(userText)}><Text style={s.primaryText}>Send
             message</Text></Pressable></View></View> :
         <View style={s.toolBlock}><Pressable style={[s.filePicker, {borderColor: palette.border}]}
                                              disabled={isSendingFile} onPress={() => void onFilesSelected()}><Text
@@ -360,20 +367,19 @@ export default function HomeScreen() {
             style={{color: palette.muted}}>{selectedFiles.length ? selectedFiles.map(file => `${file.name} (${formatBytes(file.size)})`).join(" · ") : "Any file type. The other device chooses where to save it."}</Text></Pressable>{renderTransferList()}<View
             style={s.footer}><Text
             style={{color: palette.muted}}>{selectedFiles.length ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready` : "No files selected"}</Text><Pressable
-            style={s.primary} disabled={!selectedFiles.length || isSendingFile} onPress={sendFiles}><Text
+            style={s.primary} disabled={!selectedFiles.length || isSendingFile} onPress={() => sendFileRef.current(selectedFiles)}><Text
             style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text></Pressable></View></View>}
     </View>;
 
     return <SafeAreaView style={[s.safe, {backgroundColor: palette.bg}]}><ScrollView
         contentContainerStyle={s.content}><View style={s.top}><View style={s.brand}><Text style={s.mark}>F</Text><Text
         style={[s.brandText, {color: palette.text}]}>Flash Share</Text></View><View style={s.topActions}><Text
-        style={{color: palette.muted}}>{peerStateLabel} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><Pressable
-        onPress={() => setDark(!dark)}><Text
-        style={s.theme}>{dark ? "☀" : "◒"}</Text></Pressable>{page !== "pairPage" &&
+        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><Pressable
+        onPress={toggleTheme}><Text
+        style={s.theme}>{themeIcon}</Text></Pressable>{page !== "pairPage" &&
         <Pressable onPress={exitShare}><Text style={s.exit}>×</Text></Pressable>}</View></View><View
         style={s.status}><View
-        style={[s.dot, {backgroundColor: status === "connected" ? "#2f9e68" : status === "error" ? "#d9534f" : "#d9a441"}]}/><Text
-        style={{color: palette.muted}}>{statusText}</Text></View>{page === "workPage" ? renderConnectedWorkspace() : page === "joinRoomWaitPage" || page === "connectingPage" ?
+        style={[s.dot, {backgroundColor:"#2f9e68"}]}/></View>{page === "workPage" ? renderConnectedWorkspace() : page === "joinRoomWaitPage" || page === "connectingPage" ?
         <View style={[s.card, {backgroundColor: palette.card, borderColor: palette.border}]}><ActivityIndicator
             color="#2f6fed"/><Text style={[s.heading, {color: palette.text}]}>Waiting for the other device</Text><Text
             style={{color: palette.muted}}>{page === "joinRoomWaitPage" ? "Your device has joined the room. Keep this page open while the paired device connects." : "Your devices are negotiating a direct connection. Keep this page open."}</Text>{page === "joinRoomWaitPage" && <Text style={[s.codeValue, {color: palette.text}]}>{pairKey}</Text>}</View> :
@@ -389,7 +395,7 @@ export default function HomeScreen() {
                                                                                  color: palette.text,
                                                                                  borderColor: palette.border
                                                                              }]}/><Pressable style={s.primary}
-                                                                                             onPress={pair}><Text
+                                                                                             onPress={() => pairRef.current(targetPairKey)}><Text
             style={s.primaryText}>Pair</Text></Pressable></View>}</ScrollView><Modal transparent
                                                                                           visible={isReceiveDialogOpen}
                                                                                           animationType="fade"
