@@ -1,5 +1,4 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
 import { createWebSocket } from "./websocket";
 import {
     ConnectionStatus,
@@ -10,6 +9,7 @@ import {
 } from "./webrtc";
 import storage from "./lib/storage";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import QRCode from "./components/qr-code";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -44,27 +44,9 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     failed: "Failed",
 };
 
-function PairingQrCode({ value }: { value: string }) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || !value) {
-            return;
-        }
-
-        void QRCode.toCanvas(canvas, value, {
-            width: 204,
-            margin: 1,
-            errorCorrectionLevel: "M",
-            color: { dark: "#000000", light: "#ffffff" },
-        });
-    }, [value]);
-
-    return <canvas ref={canvasRef} width="204" height="204" aria-label="Pairing QR code" role="img" />;
-}
-
 export function App() {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     const [page, setPage] = useState("pairPage");
     const [connectionSession, setConnectionSession] = useState(0);
 
@@ -75,8 +57,6 @@ export function App() {
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
@@ -458,7 +438,7 @@ export function App() {
                         <h1>Pair a device</h1>
                         <p className="muted">Scan the QR code or enter this pairing code on other device.</p>
                         {pairKey && (
-                            <div className="qr-frame"><PairingQrCode value={pairKey} /></div>
+                            <div className="qr-frame"><QRCode value={pairKey} size={204} /></div>
                         )}
                         <div className="your-code"><span>Pairing code</span><strong>{pairKey || "Preparing..."}</strong><button className="icon-button" type="button" title="Copy pairing code" onClick={() => navigator.clipboard?.writeText(pairKey)}>Copy</button></div>
                         <label className="field-label" htmlFor="target-key">Enter the other device's code</label>

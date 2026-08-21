@@ -9,6 +9,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
+    useColorScheme,
     View,
 } from "react-native";
 import {File} from "expo-file-system";
@@ -23,7 +24,7 @@ import {
     createWebRTC,
 } from "@/lib/webrtc";
 import storage from "@/components/storage";
-import {ResolvedTheme, ThemeSwitcher} from "@/components/theme-switcher";
+import {ThemeSwitcher} from "@/components/theme-switcher";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {
@@ -59,6 +60,10 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
 };
 
 export default function App() {
+    const colorScheme = useColorScheme();
+    const resolvedTheme = colorScheme === "dark" ? "dark" : "light";
+    const palette = C[resolvedTheme];
+
     const [page, setPage] = useState("pairPage");
     const [connectionSession, setConnectionSession] = useState(0);
 
@@ -74,9 +79,7 @@ export default function App() {
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
-    const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
-    const palette = C[resolvedTheme];
-    // functions: sendText, sendFile, acceptFile, rejectFile,pair
+    // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
     const sendFileRef = useRef<(files: File[]) => void>(() => {});
     const acceptFileRef = useRef<() => Promise<void>>(async () => {});
@@ -343,8 +346,7 @@ export default function App() {
     return <SafeAreaView style={[s.safe, {backgroundColor: palette.bg}]}><ScrollView
         contentContainerStyle={s.content}><View style={s.top}><View style={s.brand}><Text style={s.mark}>F</Text><Text
         style={[s.brandText, {color: palette.text}]}>Flash Share</Text></View><View style={s.topActions}><Text
-        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><ThemeSwitcher
-        onThemeChange={setResolvedTheme}/>{page !== "pairPage" &&
+        style={{color: palette.muted}}>{peerConnectionState} {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}</Text><ThemeSwitcher/>{page !== "pairPage" &&
         <Pressable onPress={exitShare}><Text style={s.exit}>×</Text></Pressable>}</View></View><View
         style={s.status}><View
         style={[s.dot, {backgroundColor:"#2f9e68"}]}/></View>{page === "workPage" ? renderConnectedWorkspace() : page === "joinRoomWaitPage" || page === "connectingPage" ?

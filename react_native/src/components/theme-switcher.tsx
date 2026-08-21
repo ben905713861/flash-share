@@ -1,30 +1,19 @@
 import {useEffect, useState} from "react";
-import {Pressable, StyleSheet, Text, useColorScheme} from "react-native";
+import {Appearance, Pressable, StyleSheet, Text} from "react-native";
 import storage from "@/components/storage";
 
 type ThemePreference = "system" | "light" | "dark";
-export type ResolvedTheme = "light" | "dark";
 
 const THEME_STORAGE_KEY = "flash-share-theme";
 
-type ThemeSwitcherProps = {
-    onThemeChange: (theme: ResolvedTheme) => void;
-};
-
-export function ThemeSwitcher({onThemeChange}: ThemeSwitcherProps) {
-    const systemColorScheme = useColorScheme();
+export function ThemeSwitcher() {
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
         const saved = storage.get(THEME_STORAGE_KEY);
         return saved === "light" || saved === "dark" ? saved : "system";
     });
-    const systemDark = systemColorScheme === "dark";
-    const resolvedTheme: ResolvedTheme = themePreference === "system"
-        ? (systemDark ? "dark" : "light")
-        : themePreference;
-
     useEffect(() => {
-        onThemeChange(resolvedTheme);
-    }, [onThemeChange, resolvedTheme]);
+        Appearance.setColorScheme(themePreference === "system" ? "unspecified" : themePreference);
+    }, [themePreference]);
 
     useEffect(() => {
         if (themePreference === "system") {
