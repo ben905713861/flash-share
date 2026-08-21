@@ -24,6 +24,7 @@ import {
 } from "@/lib/webrtc";
 import storage from "@/components/storage";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { PairingCodeScanner } from "@/components/pairing-code-scanner";
 import { C, s } from "./styles";
 
 const formatBytes = (bytes: number) => {
@@ -520,16 +521,22 @@ export default function App() {
                             </Text>
                         </View>
                         <Text style={{ color: palette.text }}>Other device code</Text>
-                        <TextInput
-                            value={targetPairKey}
-                            onChangeText={setTargetPairKey}
-                            placeholder="Pairing code"
-                            placeholderTextColor={palette.muted}
-                            style={[
-                                s.input,
-                                { color: palette.text, borderColor: palette.border },
-                            ]}
-                        />
+                        <View style={[s.inputContainer, { borderColor: palette.border }]}>
+                            <TextInput
+                                value={targetPairKey}
+                                onChangeText={setTargetPairKey}
+                                placeholder="Pairing code"
+                                placeholderTextColor={palette.muted}
+                                style={[
+                                    s.input,
+                                    { color: palette.text },
+                                ]}
+                            />
+                            <PairingCodeScanner onScanned={(code) => {
+                                setTargetPairKey(code);
+                                pairRef.current(code);
+                            }} />
+                        </View>
                         <Pressable
                             style={s.primary}
                             onPress={() => pairRef.current(targetPairKey)}
