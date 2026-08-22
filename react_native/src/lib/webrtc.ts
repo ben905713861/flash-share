@@ -1,4 +1,4 @@
-import {Directory, File} from "expo-file-system";
+import {Directory, File, FileMode} from "expo-file-system";
 import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "react-native-webrtc";
 
 const FILE_CHUNK_SIZE = 64 * 1024;
@@ -160,7 +160,8 @@ export const createWebRTC = ({
         };
         // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
         // React Native's Blob implementation does not support that input.
-        const readHandle = file.open();
+        // Open explicitly as read-only so both file:// and SAF content:// files work.
+        const readHandle = file.open(FileMode.ReadOnly);
         try {
             for (let offset = 0, chunkIndex = 0; offset < file.size;) {
                 if (fileChannel?.readyState !== "open") {
@@ -226,6 +227,7 @@ export const createWebRTC = ({
                     return;
                 }
                 const { type } = payload;
+                console.log("peer connection payload type", type);
                 if (type === "file-request") {
                     const { fileDetails } = payload;
                     console.log("Received file requested, fileDetails", fileDetails);
@@ -328,7 +330,6 @@ export const createWebRTC = ({
                 }
                 return;
             }
-            debugger
             const bytes = event.data instanceof ArrayBuffer
                 ? new Uint8Array(event.data)
                 : event.data instanceof Uint8Array

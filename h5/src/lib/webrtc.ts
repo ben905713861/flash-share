@@ -229,7 +229,8 @@ export const createWebRTC = ({
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
                         fileChannelSend({ type: "file-start-ack", filename, size });
-                    } catch {
+                    } catch (e) {
+                        console.error("file-start error", e);
                         updateFileTransferProgress(filename, 0, "failed");
                         fileChannelSend({ type: "file-start-reject", filename, size });
                     }
