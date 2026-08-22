@@ -3,7 +3,6 @@ import {
     ActivityIndicator,
     Alert,
     Modal,
-    Platform,
     Pressable,
     ScrollView,
     Text,
@@ -11,10 +10,11 @@ import {
     useColorScheme,
     View,
 } from "react-native";
-import { File } from "expo-file-system";
 import { SafeAreaView } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 import { createWebSocket } from "@/lib/websocket";
+import {pickTransferFiles, type TransferFile} from "@/lib/file-transfer";
+import {applyThemePreference, type ThemePreference} from "@/lib/theme";
 import {
     ConnectionStatus,
     FileDetail,
@@ -40,7 +40,7 @@ const makePairKey = () => {
     return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
 }
 
-const hasDuplicateFilenames = (files: File[]) => {
+const hasDuplicateFilenames = (files: TransferFile[]) => {
     const names = new Set<string>();
     for (const file of files) {
         if (names.has(file.name)) {
@@ -50,6 +50,8 @@ const hasDuplicateFilenames = (files: File[]) => {
     }
     return false;
 };
+
+const THEME_STORAGE_KEY = "flash-share-theme";
 
 const transferStatusLabel: Record<FileTransferStatus, string> = {
     awaiting_approval: "Awaiting approval",
@@ -62,8 +64,23 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
 
 export default function App() {
     const colorScheme = useColorScheme();
-    const resolvedTheme = colorScheme === "dark" ? "dark" : "light";
+    const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+        const saved = storage.get(THEME_STORAGE_KEY);
+        return saved === "light" || saved === "dark" ? saved : "system";
+    });
+    const resolvedTheme = themePreference === "system"
+        ? (colorScheme === "dark" ? "dark" : "light")
+        : themePreference;
     const palette = C[resolvedTheme];
+
+    useEffect(() => {
+        applyThemePreference(themePreference);
+        if (themePreference === "system") {
+            storage.remove(THEME_STORAGE_KEY);
+        } else {
+            storage.set(THEME_STORAGE_KEY, themePreference);
+        }
+    }, [themePreference]);
 
     const [page, setPage] = useState("pairPage");
     const [connectionSession, setConnectionSession] = useState(0);
@@ -75,14 +92,14 @@ export default function App() {
     const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
-    const sendFileRef = useRef<(files: File[]) => void>(() => {});
+    const sendFileRef = useRef<(files: TransferFile[]) => void>(() => {});
     const acceptFileRef = useRef<() => Promise<void>>(async () => {});
     const rejectFileRef = useRef<() => void>(() => {});
     const disconnectRef = useRef<() => void>(() => {});
@@ -90,11 +107,6 @@ export default function App() {
     const pairRef = useRef<(targetKey: string) => void>(() => {});
 
     useEffect(() => {
-        if (Platform.OS === "web") {
-            globalThis.alert("WebRTC requires an Android or iOS development build");
-            return;
-        }
-
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
                 setPage("pairPage");
@@ -268,7 +280,7 @@ export default function App() {
         if (isSendingFile) {
             return;
         }
-        const result = await File.pickFileAsync({multipleFiles: true});
+        const result = await pickTransferFiles();
         if (result.canceled) {
             return;
         }
@@ -458,7 +470,10 @@ export default function App() {
                             {peerConnectionState}{" "}
                             {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}
                         </Text>
-                        <ThemeSwitcher />
+                        <ThemeSwitcher
+                            themePreference={themePreference}
+                            onChange={setThemePreference}
+                        />
                         {page !== "pairPage" && (
                             <Pressable accessibilityLabel="Exit sharing" onPress={exitShare}>
                                 <Text style={s.exit}>×</Text>

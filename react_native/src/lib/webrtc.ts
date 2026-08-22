@@ -1,5 +1,18 @@
-import {Directory, File, FileMode} from "expo-file-system";
-import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "react-native-webrtc";
+import {
+    appendFileChunk,
+    closeFileReader,
+    createReceiveFile,
+    deleteFile,
+    finalizeReceiveFile,
+    getFileSize,
+    openFileForReading,
+    pickReceiveDirectory,
+    readFileChunk,
+    type ReceiveDirectory,
+    type ReceiveFile,
+    type TransferFile,
+} from "./file-transfer";
+import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
 const FILE_CHUNK_SIZE = 64 * 1024;
 const FILE_CHUNK_WINDOW = 16;
@@ -75,12 +88,12 @@ export const createWebRTC = ({
     let lastPongAt = Date.now();
     let isInterruptFileSending = false;
     const iceBuffer: RTCIceCandidate[] = [];
-    let sendingFiles: File[] = [];
+    let sendingFiles: TransferFile[] = [];
     let wakeupFileSending: (() => void) | undefined;
     let interruptFileSending: (() => void) | undefined;
-    let dirPicker: Directory | undefined;
-    let writable: File | undefined;
-    let fileHandle: File | undefined;
+    let dirPicker: ReceiveDirectory | undefined;
+    let writable: ReceiveFile | undefined;
+    let fileHandle: ReceiveFile | undefined;
     let chunkIndex = 0;
 
     const fileChannelSend = (content: FileRequest) => {
@@ -153,7 +166,7 @@ export const createWebRTC = ({
         });
     };
 
-    const sendSingleFile = async (file: File) => {
+    const sendSingleFile = async (file: TransferFile) => {
         isInterruptFileSending = false;
         interruptFileSending = () => {
             isInterruptFileSending = true;
@@ -161,7 +174,7 @@ export const createWebRTC = ({
         // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
         // React Native's Blob implementation does not support that input.
         // Open explicitly as read-only so both file:// and SAF content:// files work.
-        const readHandle = file.open(FileMode.ReadOnly);
+        const readHandle = openFileForReading(file);
         try {
             for (let offset = 0, chunkIndex = 0; offset < file.size;) {
                 if (fileChannel?.readyState !== "open") {
@@ -173,7 +186,7 @@ export const createWebRTC = ({
                 if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
                     await waitForFileChannelDrain(fileChannel);
                 }
-                const chunk = readHandle.readBytes(Math.min(FILE_CHUNK_SIZE, file.size - offset));
+                const chunk = await readFileChunk(readHandle, Math.min(FILE_CHUNK_SIZE, file.size - offset));
                 if (chunk.byteLength === 0) {
                     break;
                 }
@@ -193,7 +206,7 @@ export const createWebRTC = ({
                 }
             }
         } finally {
-            readHandle.close();
+            closeFileReader(readHandle);
         }
     };
 
@@ -249,12 +262,7 @@ export const createWebRTC = ({
                         if (!dirPicker) {
                             throw new Error("No receive directory selected");
                         }
-                        const existingFile = new File(dirPicker, filename);
-                        if (existingFile.exists) {
-                            existingFile.delete();
-                        }
-                        // SAF content:// URIs must be created through their parent directory.
-                        fileHandle = dirPicker.createFile(filename, null);
+                        fileHandle = createReceiveFile(dirPicker, filename);
                         writable = fileHandle;
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
@@ -289,9 +297,10 @@ export const createWebRTC = ({
                 } else if (type === "file-end") {
                     const { filename, size } = payload;
                     try {
-                        const received = fileHandle?.info();
+                        const receivedSize = fileHandle && await getFileSize(fileHandle);
                         writable = undefined;
-                        if (received?.size === size) {
+                        if (receivedSize === size) {
+                            await finalizeReceiveFile(fileHandle!);
                             updateFileTransferProgress(filename, size, "completed");
                             fileChannelSend({ type: "file-end-ack", filename, size });
                             addActivity(`Received ${filename}`);
@@ -337,7 +346,7 @@ export const createWebRTC = ({
                     : undefined;
             if (bytes && writable) {
                 try {
-                    writable.write(bytes, {append: true});
+                    await appendFileChunk(writable, bytes);
                     chunkIndex += 1;
                     updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE);
                     if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
@@ -348,7 +357,9 @@ export const createWebRTC = ({
                     debugger
                     fileChannelSend({ type: "file-abort" });
                     try {
-                        fileHandle?.delete();
+                        if (fileHandle) {
+                            await deleteFile(fileHandle);
+                        }
                     } catch {
                     }
                     writable = undefined;
@@ -514,7 +525,7 @@ export const createWebRTC = ({
         addActivity("Message sent");
     };
 
-    const sendFile = (files: File[]) => {
+    const sendFile = (files: TransferFile[]) => {
         setIsSendingFile(true);
         if (fileChannel?.readyState !== "open") {
             updateStatus("error", "Connect a device before sending files");
@@ -539,7 +550,7 @@ export const createWebRTC = ({
 
     const acceptFile = async () => {
         try {
-            dirPicker = await Directory.pickDirectoryAsync();
+            dirPicker = await pickReceiveDirectory();
             updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
         } catch {
