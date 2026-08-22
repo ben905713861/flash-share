@@ -23,8 +23,8 @@ import {
     createWebRTC,
 } from "@/lib/webrtc";
 import storage from "@/lib/storage";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import { PairingCodeScanner } from "@/components/pairing-code-scanner";
+import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
 
 const formatBytes = (bytes: number) => {
@@ -96,6 +96,7 @@ export default function App() {
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
+    const [isSettingsOpen, setSettingsOpen] = useState(false);
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
     const sendTextRef = useRef<(text: string) => void>(() => {});
@@ -470,10 +471,14 @@ export default function App() {
                             {peerConnectionState}{" "}
                             {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}
                         </Text>
-                        <ThemeSwitcher
-                            themePreference={themePreference}
-                            onChange={setThemePreference}
-                        />
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Open settings"
+                            onPress={() => setSettingsOpen(true)}
+                            style={s.settingsButton}
+                        >
+                            <Text style={[s.settingsIcon, { color: palette.text }]}>⚙</Text>
+                        </Pressable>
                         {page !== "pairPage" && (
                             <Pressable accessibilityLabel="Exit sharing" onPress={exitShare}>
                                 <Text style={s.exit}>×</Text>
@@ -561,6 +566,17 @@ export default function App() {
                     </View>
                 )}
             </ScrollView>
+            <SettingsModal
+                visible={isSettingsOpen}
+                themePreference={themePreference}
+                palette={palette}
+                onThemeChange={setThemePreference}
+                onClose={() => setSettingsOpen(false)}
+                onLogout={() => {
+                    setSettingsOpen(false);
+                    exitShare();
+                }}
+            />
             <Modal
                 transparent
                 visible={isReceiveDialogOpen}
