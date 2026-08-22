@@ -247,11 +247,12 @@ export const createWebRTC = ({
                         if (!dirPicker) {
                             throw new Error("No receive directory selected");
                         }
-                        fileHandle = new File(dirPicker, filename);
-                        if (fileHandle.exists) {
-                            fileHandle.delete();
+                        const existingFile = new File(dirPicker, filename);
+                        if (existingFile.exists) {
+                            existingFile.delete();
                         }
-                        fileHandle.create({overwrite: true});
+                        // SAF content:// URIs must be created through their parent directory.
+                        fileHandle = dirPicker.createFile(filename, null);
                         writable = fileHandle;
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
