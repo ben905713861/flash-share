@@ -24,6 +24,7 @@ import {
 } from "@/lib/webrtc";
 import storage from "@/lib/storage";
 import { PairDevice } from "@/components/pair-device";
+import { TextWorkspace } from "@/components/text-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
 
@@ -386,31 +387,12 @@ export default function App() {
                 </Pressable>
             </View>
             {activeTab === "message" ? (
-                <View style={s.toolBlock}>
-                    <TextInput
-                        multiline
-                        value={userText}
-                        onChangeText={setUserText}
-                        placeholder="Write a note for the other device..."
-                        placeholderTextColor={palette.muted}
-                        style={[
-                            s.messageInput,
-                            { color: palette.text, borderColor: palette.border },
-                        ]}
-                    />
-                    <View style={s.footer}>
-                        <Text style={{ color: palette.muted }}>
-                            {userText.length} characters
-                        </Text>
-                        <Pressable
-                            style={[s.primary, !userText.trim() && s.disabled]}
-                            disabled={!userText.trim()}
-                            onPress={() => sendTextRef.current(userText)}
-                        >
-                            <Text style={s.primaryText}>Send message</Text>
-                        </Pressable>
-                    </View>
-                </View>
+                <TextWorkspace
+                    value={userText}
+                    palette={palette}
+                    onChangeText={setUserText}
+                    onSend={(text) => sendTextRef.current(text)}
+                />
             ) : (
                 <View style={s.toolBlock}>
                     <Pressable
