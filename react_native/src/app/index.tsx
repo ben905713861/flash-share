@@ -25,7 +25,7 @@ import {
 import storage from "@/components/storage";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { PairingCodeScanner } from "@/components/pairing-code-scanner";
-import { C, s } from "./styles";
+import { C, s } from "@/styles";
 
 const formatBytes = (bytes: number) => {
     if (bytes === 0) {

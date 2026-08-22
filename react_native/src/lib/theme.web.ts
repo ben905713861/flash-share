@@ -1,4 +1,4 @@
-export type ThemePreference = "system" | "light" | "dark";
+import type {ThemePreference} from "./theme";
 
 export const applyThemePreference = (preference: ThemePreference) => {
     const root = document.documentElement;

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Alert, Modal, Pressable, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { s } from "@/app/styles";
+import { s } from "@/styles";
 
 type PairingCodeScannerProps = { onScanned: (code: string) => void };
 
