@@ -15,6 +15,7 @@ export const pickTransferFiles = (): Promise<{canceled: false; result: TransferF
 };
 
 type WebDirectoryHandle = {
+    requestPermission: (options: {mode: "read" | "readwrite"}) => Promise<"granted" | "denied">;
     getFileHandle: (name: string, options: {create: boolean}) => Promise<WebFileHandle>;
 };
 
@@ -28,7 +29,7 @@ type WebWritableFileStream = {
 };
 
 type DirectoryPickerGlobal = typeof globalThis & {
-    showDirectoryPicker?: () => Promise<WebDirectoryHandle>;
+    showDirectoryPicker?: (options?: {mode?: "read" | "readwrite"}) => Promise<WebDirectoryHandle>;
 };
 
 export type ReceiveDirectory = {
@@ -58,7 +59,15 @@ export const readFileChunk = async (reader: FileReader, size: number) => {
 export const closeFileReader = (_reader: FileReader) => undefined;
 
 export const pickReceiveDirectory = async (): Promise<ReceiveDirectory> => {
-    const handle = await (globalThis as DirectoryPickerGlobal).showDirectoryPicker?.();
+    const picker = (globalThis as DirectoryPickerGlobal).showDirectoryPicker;
+    if (!picker) {
+        throw new Error("Directory access is not supported in this browser");
+    }
+    const handle = await picker({mode: "readwrite"});
+    const permission = await handle.requestPermission({mode: "readwrite"});
+    if (permission !== "granted") {
+        throw new Error("Write permission for the receive directory was denied");
+    }
     return {handle};
 };
 
