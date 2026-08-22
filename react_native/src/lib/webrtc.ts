@@ -14,7 +14,7 @@ import {
 } from "./file-transfer";
 import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
-const FILE_CHUNK_SIZE = 64 * 1024;
+const FILE_CHUNK_SIZE = 256 * 1024;
 const FILE_CHUNK_WINDOW = 16;
 const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
@@ -307,8 +307,10 @@ export const createWebRTC = ({
                         } else {
                             updateFileTransferProgress(filename, -1, "failed");
                             fileChannelSend({ type: "file-end-reject", filename, size });
+                            console.warn("file is damaged", filename);
                         }
-                    } catch {
+                    } catch (e) {
+                        console.error("exception occurs in file-end process.", e);
                         updateFileTransferProgress(filename, -1, "failed");
                         fileChannelSend({ type: "file-end-reject", filename, size });
                     }

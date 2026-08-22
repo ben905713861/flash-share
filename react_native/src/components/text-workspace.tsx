@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Text, TextInput, View } from "react-native";
+import storage from "@/lib/storage";
 import { C, s } from "@/styles";
+
+const TEXT_STORAGE_KEY = "flash-share-text";
 
 type TextWorkspaceProps = {
     value: string;
@@ -11,7 +14,18 @@ type TextWorkspaceProps = {
 
 export function TextWorkspace({ value, palette, onChangeText, onSend }: TextWorkspaceProps) {
     const onSendRef = useRef(onSend);
+    const hasLoadedText = useRef(false);
     onSendRef.current = onSend;
+
+    useEffect(() => {
+        const savedText = storage.get(TEXT_STORAGE_KEY);
+        if (savedText !== undefined) onChangeText(savedText);
+        hasLoadedText.current = true;
+    }, [onChangeText]);
+
+    useEffect(() => {
+        if (hasLoadedText.current) storage.set(TEXT_STORAGE_KEY, value);
+    }, [value]);
 
     useEffect(() => {
         if (!value.trim()) return;
