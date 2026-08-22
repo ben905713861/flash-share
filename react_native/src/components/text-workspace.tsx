@@ -1,4 +1,5 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Text, TextInput, View } from "react-native";
 import { C, s } from "@/styles";
 
 type TextWorkspaceProps = {
@@ -9,6 +10,15 @@ type TextWorkspaceProps = {
 };
 
 export function TextWorkspace({ value, palette, onChangeText, onSend }: TextWorkspaceProps) {
+    const onSendRef = useRef(onSend);
+    onSendRef.current = onSend;
+
+    useEffect(() => {
+        if (!value.trim()) return;
+        const timer = setTimeout(() => onSendRef.current(value), 800);
+        return () => clearTimeout(timer);
+    }, [value]);
+
     return (
         <View style={s.toolBlock}>
             <TextInput
@@ -19,16 +29,7 @@ export function TextWorkspace({ value, palette, onChangeText, onSend }: TextWork
                 placeholderTextColor={palette.muted}
                 style={[s.messageInput, { color: palette.text, borderColor: palette.border }]}
             />
-            <View style={s.footer}>
-                <Text style={{ color: palette.muted }}>{value.length} characters</Text>
-                <Pressable
-                    style={[s.primary, !value.trim() && s.disabled]}
-                    disabled={!value.trim()}
-                    onPress={() => onSend(value)}
-                >
-                    <Text style={s.primaryText}>Send message</Text>
-                </Pressable>
-            </View>
+            <Text style={{ color: palette.muted }}>{value.length} characters</Text>
         </View>
     );
 }
