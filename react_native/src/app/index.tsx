@@ -23,7 +23,7 @@ import {
     createWebRTC,
 } from "@/lib/webrtc";
 import storage from "@/lib/storage";
-import { PairingCodeScanner } from "@/components/pairing-code-scanner";
+import { PairDevice } from "@/components/pair-device";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
 
@@ -479,11 +479,6 @@ export default function App() {
                         >
                             <Text style={[s.settingsIcon, { color: palette.text }]}>⚙</Text>
                         </Pressable>
-                        {page !== "pairPage" && (
-                            <Pressable accessibilityLabel="Exit sharing" onPress={exitShare}>
-                                <Text style={s.exit}>×</Text>
-                            </Pressable>
-                        )}
                     </View>
                 </View>
                 {page === "workPage" ? (
@@ -515,55 +510,13 @@ export default function App() {
                         )}
                     </View>
                 ) : (
-                    <View
-                        style={[
-                            s.card,
-                            { backgroundColor: palette.card, borderColor: palette.border },
-                        ]}
-                    >
-                        <Text style={[s.heading, { color: palette.text }]}>
-                            Pair a device!
-                        </Text>
-                        <Text style={{ color: palette.muted }}>
-                            Enter this pairing code on the other device.
-                        </Text>
-                        <View style={s.code}>
-                            <Text style={{ color: palette.text }}>Pairing code</Text>
-                            <View style={s.qrFrame}>
-                                {pairKey ? (
-                                    <QRCode value={pairKey} size={180} />
-                                ) : (
-                                    <ActivityIndicator color="#2f6fed" />
-                                )}
-                            </View>
-                            <Text style={[s.codeValue, { color: palette.text }]}>
-                                {pairKey || "Preparing..."}
-                            </Text>
-                        </View>
-                        <Text style={{ color: palette.text }}>Other device code</Text>
-                        <View style={[s.inputContainer, { borderColor: palette.border }]}>
-                            <TextInput
-                                value={targetPairKey}
-                                onChangeText={setTargetPairKey}
-                                placeholder="Pairing code"
-                                placeholderTextColor={palette.muted}
-                                style={[
-                                    s.input,
-                                    { color: palette.text },
-                                ]}
-                            />
-                            <PairingCodeScanner onScanned={(code) => {
-                                setTargetPairKey(code);
-                                pairRef.current(code);
-                            }} />
-                        </View>
-                        <Pressable
-                            style={s.primary}
-                            onPress={() => pairRef.current(targetPairKey)}
-                        >
-                            <Text style={s.primaryText}>Pair</Text>
-                        </Pressable>
-                    </View>
+                    <PairDevice
+                        pairKey={pairKey}
+                        targetPairKey={targetPairKey}
+                        palette={palette}
+                        onTargetPairKeyChange={setTargetPairKey}
+                        onPair={(value) => pairRef.current(value)}
+                    />
                 )}
             </ScrollView>
             <SettingsModal
