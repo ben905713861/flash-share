@@ -198,6 +198,7 @@ export const createWebRTC = ({
                     return;
                 }
                 const { type } = payload;
+                console.log("peer connection payload type", type);
                 if (type === "file-request") {
                     const { fileDetails } = payload;
                     console.log("Received file requested, fileDetails", fileDetails);
@@ -243,7 +244,8 @@ export const createWebRTC = ({
                         addActivity(`Sending ${filename}`);
                         await sendSingleFile(file);
                         fileChannelSend({ type: "file-end", filename, size: file.size });
-                    } catch {
+                    } catch (e) {
+                        console.warn("failed to send file, ", filename, e);
                         sendingFiles = [];
                         setIsSendingFile(false);
                         updateFileTransferProgress(filename, 0, "failed");
@@ -291,6 +293,7 @@ export const createWebRTC = ({
                     type === "file-start-reject"
                 ) {
                     const { filename } = payload;
+                    console.warn("file transferring", type, filename);
                     sendingFiles = [];
                     setIsSendingFile(false);
                     updateFileTransferProgress(filename, -1, "failed");

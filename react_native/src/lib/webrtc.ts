@@ -158,29 +158,41 @@ export const createWebRTC = ({
         interruptFileSending = () => {
             isInterruptFileSending = true;
         };
-        for (let offset = 0, chunkIndex = 0; offset < file.size; offset += FILE_CHUNK_SIZE) {
-            if (fileChannel?.readyState !== "open") {
-                throw new Error("File channel closed");
-            }
-            if (isInterruptFileSending) {
-                throw new Error("File transfer aborted");
-            }
-            if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
-                await waitForFileChannelDrain(fileChannel);
-            }
-            fileChannel.send(await file.slice(offset, offset + FILE_CHUNK_SIZE).arrayBuffer());
-            updateFileTransferProgress(file.name, Math.min(offset + FILE_CHUNK_SIZE, file.size));
+        // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
+        // React Native's Blob implementation does not support that input.
+        const readHandle = file.open();
+        try {
+            for (let offset = 0, chunkIndex = 0; offset < file.size;) {
+                if (fileChannel?.readyState !== "open") {
+                    throw new Error("File channel closed");
+                }
+                if (isInterruptFileSending) {
+                    throw new Error("File transfer aborted");
+                }
+                if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
+                    await waitForFileChannelDrain(fileChannel);
+                }
+                const chunk = readHandle.readBytes(Math.min(FILE_CHUNK_SIZE, file.size - offset));
+                if (chunk.byteLength === 0) {
+                    break;
+                }
+                fileChannel.send(chunk);
+                offset += chunk.byteLength;
+                updateFileTransferProgress(file.name, offset);
 
-            chunkIndex += 1;
-            if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
-                await new Promise<void>((resolve, reject) => {
-                    wakeupFileSending = resolve;
-                    interruptFileSending = () => {
-                        isInterruptFileSending = true;
-                        reject(new Error("File transfer aborted"));
-                    };
-                });
+                chunkIndex += 1;
+                if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                    await new Promise<void>((resolve, reject) => {
+                        wakeupFileSending = resolve;
+                        interruptFileSending = () => {
+                            isInterruptFileSending = true;
+                            reject(new Error("File transfer aborted"));
+                        };
+                    });
+                }
             }
+        } finally {
+            readHandle.close();
         }
     };
 
@@ -244,7 +256,8 @@ export const createWebRTC = ({
                         chunkIndex = 0;
                         updateFileTransferProgress(filename, 0, "transferring");
                         fileChannelSend({ type: "file-start-ack", filename, size });
-                    } catch {
+                    } catch (e) {
+                        console.error("file-start error", e);
                         updateFileTransferProgress(filename, 0, "failed");
                         fileChannelSend({ type: "file-start-reject", filename, size });
                     }
@@ -259,7 +272,8 @@ export const createWebRTC = ({
                         addActivity(`Sending ${filename}`);
                         await sendSingleFile(file);
                         fileChannelSend({ type: "file-end", filename, size: file.size });
-                    } catch {
+                    } catch (e) {
+                        console.warn("failed to send file, ", filename, e);
                         sendingFiles = [];
                         setIsSendingFile(false);
                         updateFileTransferProgress(filename, 0, "failed");
@@ -306,12 +320,14 @@ export const createWebRTC = ({
                     type === "file-start-reject"
                 ) {
                     const { filename } = payload;
+                    console.warn("file transferring", type, filename);
                     sendingFiles = [];
                     setIsSendingFile(false);
                     updateFileTransferProgress(filename, -1, "failed");
                 }
                 return;
             }
+            debugger
             const bytes = event.data instanceof ArrayBuffer
                 ? new Uint8Array(event.data)
                 : event.data instanceof Uint8Array
@@ -325,7 +341,9 @@ export const createWebRTC = ({
                     if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                         fileChannelSend({ type: "file-continue" });
                     }
-                } catch {
+                } catch (e) {
+                    console.error("failed to receive files", e);
+                    debugger
                     fileChannelSend({ type: "file-abort" });
                     try {
                         fileHandle?.delete();
