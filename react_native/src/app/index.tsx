@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
-    Modal,
     Pressable,
     ScrollView,
     Text,
@@ -28,15 +27,6 @@ import { TextWorkspace } from "@/components/text-workspace";
 import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
-
-const formatBytes = (bytes: number) => {
-    if (bytes === 0) {
-        return "0 B";
-    }
-    const units = ["B", "KB", "MB", "GB"];
-    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-};
 
 const makePairKey = () => {
     return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
@@ -339,6 +329,10 @@ export default function App() {
                     palette={palette}
                     onSelectFiles={() => void onFilesSelected()}
                     onSendFiles={() => sendFileRef.current(selectedFiles)}
+                    incomingFiles={incomingFiles}
+                    isReceiveDialogOpen={isReceiveDialogOpen}
+                    onAcceptFiles={() => acceptFileRef.current()}
+                    onRejectFiles={() => rejectFileRef.current()}
                 />
             )}
         </View>
@@ -418,51 +412,6 @@ export default function App() {
                     exitShare();
                 }}
             />
-            <Modal
-                transparent
-                visible={isReceiveDialogOpen}
-                animationType="fade"
-                onRequestClose={() => rejectFileRef.current()}
-            >
-                <View style={s.modalBackdrop}>
-                    <View
-                        style={[
-                            s.dialog,
-                            { backgroundColor: palette.card, borderColor: palette.border },
-                        ]}
-                    >
-                        <Text style={[s.heading, { color: palette.text }]}>
-                            Incoming files
-                        </Text>
-                        <Text style={{ color: palette.muted }}>
-                            The paired device wants to send {incomingFiles.length} file
-                            {incomingFiles.length <= 1 ? "" : "s"}.
-                        </Text>
-                        {incomingFiles.map((file) => (
-                            <View style={s.incomingFile} key={file.filename}>
-                                <Text style={{ color: palette.text }}>{file.filename}</Text>
-                                <Text style={{ color: palette.muted }}>
-                                    {formatBytes(file.size)}
-                                </Text>
-                            </View>
-                        ))}
-                        <View style={s.footer}>
-                            <Pressable
-                                style={s.secondary}
-                                onPress={() => rejectFileRef.current()}
-                            >
-                                <Text style={s.secondaryText}>Decline</Text>
-                            </Pressable>
-                            <Pressable
-                                style={s.primary}
-                                onPress={() => void acceptFileRef.current()}
-                            >
-                                <Text style={s.primaryText}>Choose folder & receive</Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
     );
 }
