@@ -161,7 +161,14 @@ export const s = StyleSheet.create({
   transferFile: { gap: 5 },
   transferSummary: { gap: 4 },
   transferName: { fontWeight: "600" },
-  transferStatus: { fontWeight: "600" },
+  transferStatus: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    fontWeight: "700",
+    overflow: "hidden",
+  },
   progressTrack: {
     height: 6,
     backgroundColor: "#d9dee5",

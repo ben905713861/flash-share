@@ -21,6 +21,15 @@ const transferStatusLabel: Record<FileTransferStatus, string> = {
     completed: "Completed", declined: "Declined", failed: "Failed",
 };
 
+const transferStatusColors: Record<FileTransferStatus, { backgroundColor: string; color: string }> = {
+    awaiting_approval: { backgroundColor: "#fff3cd", color: "#856404" },
+    queued: { backgroundColor: "#e8edf4", color: "#52606d" },
+    transferring: { backgroundColor: "#d8e5ff", color: "#2456b8" },
+    completed: { backgroundColor: "#d9f2e3", color: "#187044" },
+    declined: { backgroundColor: "#fff0d9", color: "#9a5b00" },
+    failed: { backgroundColor: "#f9d9d7", color: "#a52a25" },
+};
+
 const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";
     const units = ["B", "KB", "MB", "GB"];
@@ -49,11 +58,10 @@ export function FileWorkspace({ selectedFiles, isSendingFile, fileTransferProgre
                         return <View key={file.filename} style={s.transferFile}>
                             <View style={s.transferSummary}>
                                 <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.filename}</Text>
-                                <Text style={{ color: palette.muted }}>{formatBytes(file.size)}</Text>
-                                <Text style={[s.transferStatus, { color: palette.muted }]}>{transferStatusLabel[file.status]}</Text>
+                                <Text style={[s.transferStatus, transferStatusColors[file.status]]}>{transferStatusLabel[file.status]}</Text>
                             </View>
                             {(file.status === "transferring" || file.status === "completed") && <>
-                                <View style={s.progressTrack}><View style={[s.progressValue, { width: `${Math.max(0, Math.min(percent, 100))}%` }]} /></View>
+                                {file.status === "transferring" && <View style={s.progressTrack}><View style={[s.progressValue, { width: `${Math.max(0, Math.min(percent, 100))}%` }]} /></View>}
                                 <Text style={{ color: palette.muted }}>{`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}</Text>
                             </>}
                         </View>;
