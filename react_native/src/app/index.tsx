@@ -25,6 +25,7 @@ import {
 import storage from "@/lib/storage";
 import { PairDevice } from "@/components/pair-device";
 import { TextWorkspace } from "@/components/text-workspace";
+import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
 
@@ -53,15 +54,6 @@ const hasDuplicateFilenames = (files: TransferFile[]) => {
 };
 
 const THEME_STORAGE_KEY = "flash-share-theme";
-
-const transferStatusLabel: Record<FileTransferStatus, string> = {
-    awaiting_approval: "Awaiting approval",
-    queued: "Queued",
-    transferring: "Transferring",
-    completed: "Completed",
-    declined: "Declined",
-    failed: "Failed",
-};
 
 export default function App() {
     const colorScheme = useColorScheme();
@@ -314,60 +306,6 @@ export default function App() {
         setConnectionSession((current) => current + 1);
     };
 
-    const renderTransferList = () => {
-        const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
-        if (fileTransferProgress.length === 0) {
-            return (
-                <></>
-            );
-        }
-        return (
-            <View style={[s.transferTask, { borderColor: palette.border }]}>
-                <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
-                {fileTransferProgress.map((file) => {
-                    const percent =
-                        file.size === 0
-                            ? 100
-                            : Math.round((file.transferred / file.size) * 100);
-                    return (
-                        <View key={file.filename} style={s.transferFile}>
-                            <View style={s.transferSummary}>
-                                <Text
-                                    numberOfLines={1}
-                                    style={[s.transferName, { color: palette.text }]}
-                                >
-                                    {file.filename}
-                                </Text>
-                                <Text style={{ color: palette.muted }}>
-                                    {formatBytes(file.size)}
-                                </Text>
-                                <Text style={[s.transferStatus, { color: palette.muted }]}>
-                                    {transferStatusLabel[file.status]}
-                                </Text>
-                            </View>
-                            {(file.status === "transferring" ||
-                                file.status === "completed") && (
-                                <>
-                                    <View style={s.progressTrack}>
-                                        <View
-                                            style={[
-                                                s.progressValue,
-                                                { width: `${Math.max(0, Math.min(percent, 100))}%` },
-                                            ]}
-                                        />
-                                    </View>
-                                    <Text
-                                        style={{ color: palette.muted }}
-                                    >{`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}</Text>
-                                </>
-                            )}
-                        </View>
-                    );
-                })}
-            </View>
-        );
-    };
-
     const renderConnectedWorkspace = () => (
         <View style={s.workspace}>
             <View style={s.tabs}>
@@ -394,46 +332,14 @@ export default function App() {
                     onSend={(text) => sendTextRef.current(text)}
                 />
             ) : (
-                <View style={s.toolBlock}>
-                    <Pressable
-                        style={[s.filePicker, { borderColor: palette.border }]}
-                        disabled={isSendingFile}
-                        onPress={() => void onFilesSelected()}
-                    >
-                        <Text style={[s.filePickerTitle, { color: palette.text }]}>
-                            {selectedFiles.length
-                                ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected`
-                                : "Choose files to share"}
-                        </Text>
-                        <Text style={{ color: palette.muted }}>
-                            {selectedFiles.length
-                                ? selectedFiles
-                                        .map((file) => `${file.name} (${formatBytes(file.size)})`)
-                                        .join(" · ")
-                                : "Any file type. The other device chooses where to save it."}
-                        </Text>
-                    </Pressable>
-                    {renderTransferList()}
-                    <View style={s.footer}>
-                        <Text style={{ color: palette.muted }}>
-                            {selectedFiles.length
-                                ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready`
-                                : "No files selected"}
-                        </Text>
-                        <Pressable
-                            style={[
-                                s.primary,
-                                (!selectedFiles.length || isSendingFile) && s.disabled,
-                            ]}
-                            disabled={!selectedFiles.length || isSendingFile}
-                            onPress={() => sendFileRef.current(selectedFiles)}
-                        >
-                            <Text style={s.primaryText}>
-                                {isSendingFile ? "Awaiting approval" : "Send files"}
-                            </Text>
-                        </Pressable>
-                    </View>
-                </View>
+                <FileWorkspace
+                    selectedFiles={selectedFiles}
+                    isSendingFile={isSendingFile}
+                    fileTransferProgress={fileTransferProgress}
+                    palette={palette}
+                    onSelectFiles={() => void onFilesSelected()}
+                    onSendFiles={() => sendFileRef.current(selectedFiles)}
+                />
             )}
         </View>
     );
