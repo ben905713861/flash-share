@@ -72,7 +72,6 @@ export default function App() {
     const [targetPairKey, setTargetPairKey] = useState("");
     const [userText, setUserText] = useState("");
 
-    const [activeTab, setActiveTab] = useState<"message" | "files">("message");
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
@@ -298,30 +297,13 @@ export default function App() {
 
     const renderConnectedWorkspace = () => (
         <View style={s.workspace}>
-            <View style={s.tabs}>
-                <Pressable
-                    accessibilityRole="tab"
-                    style={[s.tab, activeTab === "message" && s.activeTab]}
-                    onPress={() => setActiveTab("message")}
-                >
-                    <Text style={s.tabText}>Text</Text>
-                </Pressable>
-                <Pressable
-                    accessibilityRole="tab"
-                    style={[s.tab, activeTab === "files" && s.activeTab]}
-                    onPress={() => setActiveTab("files")}
-                >
-                    <Text style={s.tabText}>File</Text>
-                </Pressable>
-            </View>
-            {activeTab === "message" ? (
                 <TextWorkspace
                     value={userText}
                     palette={palette}
                     onChangeText={setUserText}
                     onSend={(text) => sendTextRef.current(text)}
                 />
-            ) : (
+            <View style={{ height: 20 }} />
                 <FileWorkspace
                     selectedFiles={selectedFiles}
                     isSendingFile={isSendingFile}
@@ -334,7 +316,6 @@ export default function App() {
                     onAcceptFiles={() => acceptFileRef.current()}
                     onRejectFiles={() => rejectFileRef.current()}
                 />
-            )}
         </View>
     );
 
