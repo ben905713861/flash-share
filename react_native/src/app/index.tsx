@@ -22,7 +22,7 @@ import {
     FileTransferStatus,
     createWebRTC,
 } from "@/lib/webrtc";
-import storage from "@/components/storage";
+import storage from "@/lib/storage";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { PairingCodeScanner } from "@/components/pairing-code-scanner";
 import { C, s } from "@/styles";
