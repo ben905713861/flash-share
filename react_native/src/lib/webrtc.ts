@@ -16,6 +16,7 @@ import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
 const FILE_CHUNK_SIZE = 256 * 1024;
 const FILE_CHUNK_WINDOW = 16;
+const FILE_PROGRESS_CHUNK_INTERVAL = 4;
 const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
@@ -192,9 +193,10 @@ export const createWebRTC = ({
                 }
                 fileChannel.send(chunk);
                 offset += chunk.byteLength;
-                updateFileTransferProgress(file.name, offset, "transferring");
-
                 chunkIndex += 1;
+                if (chunkIndex % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
+                    updateFileTransferProgress(file.name, offset, "transferring");
+                }
                 if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                     await new Promise<void>((resolve, reject) => {
                         wakeupFileSending = resolve;
@@ -350,7 +352,9 @@ export const createWebRTC = ({
                 try {
                     await appendFileChunk(writable, bytes);
                     chunkIndex += 1;
-                    updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE, "transferring");
+                    if (chunkIndex % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
+                        updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE, "transferring");
+                    }
                     if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                         fileChannelSend({ type: "file-continue" });
                     }
