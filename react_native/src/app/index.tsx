@@ -166,21 +166,10 @@ export default function App() {
             setFileTransferProgress(fileProgressList);
         };
 
-        const updateFileTransferProgress = (filename: string, transferred: number, status?: FileTransferStatus) => {
+        const updateFileTransferProgress = (filename: string, transferred: number, status: FileTransferStatus) => {
             setFileTransferProgress((fileProgressList) => {
                 return fileProgressList.map(fileProgress => {
                     if (fileProgress.filename === filename) {
-                        if (status) {
-                            if (transferred < 0) {
-                                return { ...fileProgress, status };
-                            }
-                            return { ...fileProgress, transferred, status };
-                        }
-                        if (transferred >= fileProgress.size) {
-                            status = "completed";
-                        } else {
-                            status = "transferring";
-                        }
                         return {
                             ...fileProgress,
                             status,

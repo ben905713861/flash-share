@@ -44,7 +44,7 @@ type WebRTCOptions = {
     setIsSendingFile: (value: boolean) => void;
     clearSelectedFiles: () => void;
     initFileProgress: (fileDetails: FileDetail[]) => void;
-    updateFileTransferProgress: (filename: string, transferred: number, status?: FileTransferStatus) => void;
+    updateFileTransferProgress: (filename: string, transferred: number, status: FileTransferStatus) => void;
     updateFileTransferStatus: (status: FileTransferStatus) => void;
 };
 
@@ -192,7 +192,7 @@ export const createWebRTC = ({
                 }
                 fileChannel.send(chunk);
                 offset += chunk.byteLength;
-                updateFileTransferProgress(file.name, offset);
+                updateFileTransferProgress(file.name, offset, "transferring");
 
                 chunkIndex += 1;
                 if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
@@ -350,7 +350,7 @@ export const createWebRTC = ({
                 try {
                     await appendFileChunk(writable, bytes);
                     chunkIndex += 1;
-                    updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE);
+                    updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE, "transferring");
                     if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                         fileChannelSend({ type: "file-continue" });
                     }

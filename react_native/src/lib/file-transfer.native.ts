@@ -20,12 +20,14 @@ export const closeFileReader = (reader: FileReader) => {
 export const pickReceiveDirectory = () => Directory.pickDirectoryAsync();
 
 export const createReceiveFile = (directory: ReceiveDirectory, filename: string): ReceiveFile => {
-    const existingFile = new File(directory, filename);
-    if (existingFile.exists) {
+    const existingFile = directory.list().find(file => {
+        return file.name === filename;
+    });
+    if (existingFile) {
         existingFile.delete();
     }
     // SAF content:// URIs must be created through their parent directory.
-    return directory.createFile(filename, null);
+    return directory.createFile(filename, "application/octet-stream");
 };
 
 export const appendFileChunk = (file: ReceiveFile, bytes: Uint8Array) => {
