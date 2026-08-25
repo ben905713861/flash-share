@@ -13,7 +13,7 @@ export type FilePickerResult =
     | {canceled: true; result: null};
 
 export declare const pickTransferFiles: () => Promise<FilePickerResult>;
-export declare const openFileForReading: (file: TransferFile) => FileReader;
+export declare const openFileForReading: (file: TransferFile) => Promise<FileReader>;
 export declare const readFileChunk: (reader: FileReader, size: number) => Uint8Array | Promise<Uint8Array>;
 export declare const closeFileReader: (reader: FileReader) => void;
 export declare const pickReceiveDirectory: () => Promise<ReceiveDirectory>;

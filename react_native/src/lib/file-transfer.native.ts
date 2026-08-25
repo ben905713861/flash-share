@@ -1,4 +1,4 @@
-import {Directory, File, FileMode} from "expo-file-system";
+import {Directory, File, FileMode, Paths} from "expo-file-system";
 
 export type TransferFile = File;
 export type ReceiveDirectory = Directory;
@@ -9,7 +9,18 @@ export const pickTransferFiles = async (): Promise<{canceled: false; result: Tra
     return File.pickFileAsync({multipleFiles: true});
 };
 
-export const openFileForReading = (file: TransferFile): FileReader => file.open(FileMode.ReadOnly);
+export const openFileForReading = async (file: TransferFile): Promise<FileReader> => {
+    // 1. 创建 Cache 中的目标文件
+    const cacheFile = new File(
+        Paths.cache,
+        `webrtc-${Date.now()}-${file.name}`
+    );
+
+    // 2. 把 content:// 文件复制到 App Cache
+    await file.copy(cacheFile);
+
+    return cacheFile.open(FileMode.ReadOnly);
+}
 
 export const readFileChunk = (reader: FileReader, size: number) => reader.readBytes(size);
 

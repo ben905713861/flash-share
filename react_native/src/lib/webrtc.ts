@@ -175,7 +175,7 @@ export const createWebRTC = ({
         // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
         // React Native's Blob implementation does not support that input.
         // Open explicitly as read-only so both file:// and SAF content:// files work.
-        const readHandle = openFileForReading(file);
+        const readHandle = await openFileForReading(file);
         try {
             for (let offset = 0, chunkIndex = 0; offset < file.size;) {
                 if (fileChannel?.readyState !== "open") {

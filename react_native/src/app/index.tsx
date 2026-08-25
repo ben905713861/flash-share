@@ -27,6 +27,8 @@ import { TextWorkspace } from "@/components/text-workspace";
 import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
+import {Directory, File, FileMode, Paths} from "expo-file-system";
+import RNFS from 'react-native-fs';
 
 const makePairKey = () => {
     return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
@@ -323,6 +325,67 @@ export default function App() {
                             {peerConnectionState}{" "}
                             {heartbeatLatency === null ? "" : `${heartbeatLatency} ms`}
                         </Text>
+                        <Pressable onPress={
+                            async () => {
+                                const pickerResult = await File.pickFileAsync({
+                                    multipleFiles: false,
+                                });
+
+                                if (pickerResult.canceled) {
+                                    return;
+                                }
+
+                                const sourceFile = pickerResult.result;
+
+                                console.log("source:", sourceFile.uri);
+                                console.log("size:", sourceFile.size);
+
+                                // 1. 创建 Cache 中的目标文件
+                                const cacheFile = new File(
+                                    Paths.cache,
+                                    `webrtc-${Date.now()}-${sourceFile.name}`
+                                );
+
+                                // 2. 把 content:// 文件复制到 App Cache
+                                sourceFile.copy(cacheFile);
+
+                                console.log("cache:", cacheFile.uri);
+                                console.log("cache size:", cacheFile.size);
+
+                                // 3. 从 App 自己的 file:// 文件读取
+                                const fileHandle = cacheFile.open(FileMode.ReadOnly);
+
+                                try {
+                                    while (true) {
+                                        try {
+                                            const bytes = fileHandle.readBytes(64 * 1024);
+
+                                            console.log(
+                                                "offset:",
+                                                fileHandle.offset,
+                                                "size:",
+                                                fileHandle.size,
+                                                "bytes:",
+                                                bytes.length
+                                            );
+
+                                            if (bytes.length === 0) {
+                                                break;
+                                            }
+                                        } catch (e) {
+                                            console.error("readBytes failed:", e);
+                                            console.error("offset:", fileHandle.offset);
+                                            console.error("size:", fileHandle.size);
+                                            throw e;
+                                        }
+                                    }
+                                } finally {
+                                    fileHandle.close();
+                                }
+                            }
+                        }>
+                            <Text>test</Text>
+                        </Pressable>
                         <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="Open settings"
