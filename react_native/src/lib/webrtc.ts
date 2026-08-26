@@ -185,9 +185,10 @@ export const createWebRTC = ({
                     throw new Error("File transfer aborted");
                 }
                 if (fileChannel.bufferedAmount >= FILE_BUFFER_HIGH_WATER_MARK) {
+                    console.log("waitForFileChannelDrain");
                     await waitForFileChannelDrain(fileChannel);
                 }
-                const chunk = await readFileChunk(readHandle, Math.min(FILE_CHUNK_SIZE, file.size - offset));
+                const chunk = await readFileChunk(readHandle, FILE_CHUNK_SIZE);
                 if (chunk.byteLength === 0) {
                     break;
                 }
