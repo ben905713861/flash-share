@@ -29,6 +29,7 @@ import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
 import {Directory, File, FileMode, Paths} from "expo-file-system";
 import RNFS from 'react-native-fs';
+import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
 
 const makePairKey = () => {
     return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
@@ -327,6 +328,7 @@ export default function App() {
                         </Text>
                         <Pressable onPress={
                             async () => {
+
                                 const pickerResult = await File.pickFileAsync({
                                     multipleFiles: false,
                                 });
@@ -334,54 +336,25 @@ export default function App() {
                                 if (pickerResult.canceled) {
                                     return;
                                 }
-
                                 const sourceFile = pickerResult.result;
 
                                 console.log("source:", sourceFile.uri);
-                                console.log("size:", sourceFile.size);
 
-                                // 1. 创建 Cache 中的目标文件
-                                const cacheFile = new File(
-                                    Paths.cache,
-                                    `webrtc-${Date.now()}-${sourceFile.name}`
-                                );
-
-                                // 2. 把 content:// 文件复制到 App Cache
-                                sourceFile.copy(cacheFile);
-
-                                console.log("cache:", cacheFile.uri);
-                                console.log("cache size:", cacheFile.size);
-
-                                // 3. 从 App 自己的 file:// 文件读取
-                                const fileHandle = cacheFile.open(FileMode.ReadOnly);
-
+                                const handler = await NativeFileReaderModule.open(sourceFile.uri)
+                                console.log(handler);
                                 try {
+                                    let bytes: Uint8Array | null;
                                     while (true) {
-                                        try {
-                                            const bytes = fileHandle.readBytes(64 * 1024);
-
-                                            console.log(
-                                                "offset:",
-                                                fileHandle.offset,
-                                                "size:",
-                                                fileHandle.size,
-                                                "bytes:",
-                                                bytes.length
-                                            );
-
-                                            if (bytes.length === 0) {
-                                                break;
-                                            }
-                                        } catch (e) {
-                                            console.error("readBytes failed:", e);
-                                            console.error("offset:", fileHandle.offset);
-                                            console.error("size:", fileHandle.size);
-                                            throw e;
+                                        bytes = await NativeFileReaderModule.read(handler, 512 * 1024);
+                                        if (bytes === null) {
+                                            break;
                                         }
+                                        console.log("bytes", bytes.length);
                                     }
                                 } finally {
-                                    fileHandle.close();
+                                    await NativeFileReaderModule.close(handler);
                                 }
+                                console.log("end");
                             }
                         }>
                             <Text>test</Text>

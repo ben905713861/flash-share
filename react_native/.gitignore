@@ -45,3 +45,4 @@ example
 
 package-lock.json
 
+/modules/native-file-reader/android/build/
