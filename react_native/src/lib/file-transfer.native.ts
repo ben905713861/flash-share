@@ -1,31 +1,25 @@
 import {Directory, File, FileMode, Paths} from "expo-file-system";
+import NativeFileReaderModule from "../../modules/native-file-reader/src/NativeFileReaderModule";
 
 export type TransferFile = File;
 export type ReceiveDirectory = Directory;
 export type ReceiveFile = File;
-export type FileReader = ReturnType<File["open"]>;
+export type FileReader = string;
 
 export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     return File.pickFileAsync({multipleFiles: true});
 };
 
 export const openFileForReading = async (file: TransferFile): Promise<FileReader> => {
-    // 1. 创建 Cache 中的目标文件
-    const cacheFile = new File(
-        Paths.cache,
-        `webrtc-${Date.now()}-${file.name}`
-    );
-
-    // 2. 把 content:// 文件复制到 App Cache
-    await file.copy(cacheFile);
-
-    return cacheFile.open(FileMode.ReadOnly);
+    return await NativeFileReaderModule.open(file.uri);
 }
 
-export const readFileChunk = (reader: FileReader, size: number) => reader.readBytes(size);
+export const readFileChunk = async (reader: FileReader, size: number) => {
+    return await NativeFileReaderModule.read(reader, size);
+}
 
-export const closeFileReader = (reader: FileReader) => {
-    reader.close();
+export const closeFileReader = async (reader: FileReader) => {
+    await NativeFileReaderModule.close(reader);
 };
 
 export const pickReceiveDirectory = () => Directory.pickDirectoryAsync();
