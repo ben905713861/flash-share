@@ -6,7 +6,6 @@
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:8081",
-    "beforeDevCommand": "npm run web",
     "beforeBuildCommand": "npx expo export --platform web"
   },
   "app": {
