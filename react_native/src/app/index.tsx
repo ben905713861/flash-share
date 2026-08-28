@@ -5,12 +5,10 @@ import {
     Pressable,
     ScrollView,
     Text,
-    TextInput,
     useColorScheme,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import QRCode from "react-native-qrcode-svg";
 import { createWebSocket } from "@/lib/websocket";
 import {pickTransferFiles, type TransferFile} from "@/lib/file-transfer";
 import {applyThemePreference, type ThemePreference} from "@/lib/theme";
@@ -27,8 +25,7 @@ import { TextWorkspace } from "@/components/text-workspace";
 import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { C, s } from "@/styles";
-import {Directory, File, FileMode, Paths} from "expo-file-system";
-import RNFS from 'react-native-fs';
+import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
 
 const makePairKey = () => {
@@ -369,9 +366,27 @@ export default function App() {
                         </Pressable>
                     </View>
                 </View>
-                {page === "workPage" ? (
+                {page === "workPage" &&
                     renderConnectedWorkspace()
-                ) : page === "joinRoomWaitPage" || page === "connectingPage" ? (
+                }
+                {page === "joinRoomWaitPage" && (
+                    <View
+                        style={[
+                            s.card,
+                            { backgroundColor: palette.card, borderColor: palette.border },
+                        ]}
+                    >
+                        <ActivityIndicator color="#2f6fed" />
+                        <Text style={[s.heading, { color: palette.text, textAlign: "center" }]}>
+                            Waiting for the other device
+                        </Text>
+                        <Text style={{ color: palette.muted }}>
+                            Your device has joined the room. Keep this page open while the paired device connects.
+                        </Text>
+                    </View>
+                )}
+
+                {page === "connectingPage" && (
                     <View
                         style={[
                             s.card,
@@ -383,21 +398,12 @@ export default function App() {
                             Waiting for the other device
                         </Text>
                         <Text style={{ color: palette.muted }}>
-                            {page === "joinRoomWaitPage"
-                                ? "Your device has joined the room. Keep this page open while the paired device connects."
-                                : "Your devices are negotiating a direct connection. Keep this page open."}
+                            Your devices are negotiating a direct connection. Keep this page open.
                         </Text>
-                        {page === "joinRoomWaitPage" && (
-                            <View style={s.qrFrame}>
-                                {pairKey ? (
-                                    <QRCode value={pairKey} size={180} />
-                                ) : (
-                                    <ActivityIndicator color="#2f6fed" />
-                                )}
-                            </View>
-                        )}
                     </View>
-                ) : (
+                )}
+
+                {page === "pairPage" && (
                     <PairDevice
                         pairKey={pairKey}
                         targetPairKey={targetPairKey}
