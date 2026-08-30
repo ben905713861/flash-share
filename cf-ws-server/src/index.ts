@@ -38,27 +38,119 @@ export class MyDurableObject extends DurableObject<Env> {
 	}
 }
 
+export class ChatRoom {
+	constructor(
+		private state: DurableObjectState,
+		private env: Env,
+	) {}
+
+	async fetch(request: Request): Promise<Response> {
+		if (request.headers.get("Upgrade") !== "websocket") {
+			return new Response("Expected WebSocket", {
+				status: 426,
+			});
+		}
+
+		const pair = new WebSocketPair();
+		const client = pair[0];
+		const server = pair[1];
+
+		// add ws to DO
+		this.state.acceptWebSocket(server);
+
+		server.serializeAttachment({
+			connectedAt: Date.now(),
+		});
+
+		server.send(
+			JSON.stringify({
+				type: "connected",
+				message: "WebSocket connected",
+			}),
+		);
+
+		return new Response(null, {
+			status: 101,
+			webSocket: client,
+		});
+	}
+
+	async webSocketMessage(
+		ws: WebSocket,
+		message: string | ArrayBuffer,
+	) {
+		const text =
+			typeof message === "string"
+				? message
+				: new TextDecoder().decode(message);
+
+		console.log("收到消息:", text);
+
+		// 获取当前 Durable Object 管理的所有 WebSocket
+		const sockets = this.state.getWebSockets();
+
+		for (const socket of sockets) {
+			// 不发送给自己
+			if (socket === ws) {
+				continue;
+			}
+
+			const info = socket.deserializeAttachment();
+
+			const { connectedAt } = info;
+
+			try {
+				socket.send(
+					JSON.stringify({
+						type: "message",
+						data: text,
+						connectedAt,
+					}),
+				);
+			} catch (error) {
+				console.error("发送失败:", error);
+			}
+		}
+	}
+
+	async webSocketClose(
+		ws: WebSocket,
+		code: number,
+		reason: string,
+		wasClean: boolean,
+	) {
+		console.log("WebSocket closed", {
+			code,
+			reason,
+			wasClean,
+		});
+	}
+
+	async webSocketError(
+		ws: WebSocket,
+		error: unknown,
+	) {
+		console.error("WebSocket error:", error);
+	}
+}
+
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx): Promise<Response> {
-		// Create a stub to open a communication channel with the Durable Object
-		// instance named "foo".
-		//
-		// Requests from all Workers to the Durable Object instance named "foo"
-		// will go to a single remote Durable Object instance.
-		const stub = env.MY_DURABLE_OBJECT.getByName("foo");
+	async fetch(request: Request, env: Env): Promise<Response> {
+		const url = new URL(request.url);
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance.
-		const greeting = await stub.sayHello("world");
+		if (url.pathname === "/ws") {
+			if (request.headers.get("Upgrade") !== "websocket") {
+				return new Response("Expected WebSocket", { status: 426 });
+			}
 
-		return new Response(greeting);
+			// 根据 room 参数决定进入哪个房间
+			const room = url.searchParams.get("room") || "default";
+
+			const stub = env.CHAT_ROOM.getByName(room);
+
+			return stub.fetch(request);
+		}
+
+		return new Response("WebSocket Server");
 	},
-} satisfies ExportedHandler<Env>;
+};

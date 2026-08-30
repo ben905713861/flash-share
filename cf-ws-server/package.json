@@ -5,6 +5,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
+	"dev:debug": "wrangler dev --inspector-port 9229",
     "start": "wrangler dev",
     "cf-typegen": "wrangler types"
   },
