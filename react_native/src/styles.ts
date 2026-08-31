@@ -189,6 +189,11 @@ export const s = StyleSheet.create({
     padding: 24,
   },
   dialog: { borderRadius: 14, borderWidth: 1, padding: 22, gap: 16 },
+  alertDialog: {
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+  },
   settingsDismiss: {
     position: "absolute",
     top: 0,

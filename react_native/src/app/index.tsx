@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Pressable,
     ScrollView,
     Text,
@@ -24,6 +23,7 @@ import { PairDevice } from "@/components/pair-device";
 import { TextWorkspace } from "@/components/text-workspace";
 import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
+import { AlertModal, showAlert } from "@/components/alert-modal";
 import { C, s } from "@/styles";
 import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
@@ -96,14 +96,14 @@ export default function App() {
                 updateStatus("ready", "Share your code to pair a device");
             } else if (type === "PENDING_PAIR_FAIL") {
                 const { error } = data;
-                Alert.alert("failed to register pairKey, " + error);
+                showAlert("Error", "failed to register pairKey, " + error);
                 clearConnHistory();
             } else if (type === "PAIR_FAIL") {
                 const { error } = data;
-                Alert.alert( "failed to pair device, " + error);
+                showAlert("Error", "failed to pair device, " + error);
             } else if (type === "JOIN_ROOM_FAIL") {
                 const { error } = data;
-                Alert.alert("failed to join room, " + error);
+                showAlert("Error", "failed to join room, " + error);
                 clearConnHistory();
             } else if (type === "PAIR_SUCC") {
                 storage.set("roomKey", data.roomKey);
@@ -277,7 +277,7 @@ export default function App() {
         }
         if (hasDuplicateFilenames(result.result)) {
             setSelectedFiles([]);
-            Alert.alert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
+            showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
             return;
         }
         setSelectedFiles(result.result);
@@ -443,6 +443,7 @@ export default function App() {
                     exitShare();
                 }}
             />
+            <AlertModal palette={palette} />
         </SafeAreaView>
     );
 }

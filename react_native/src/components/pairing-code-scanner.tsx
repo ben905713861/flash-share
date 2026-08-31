@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { Alert, Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { s } from "@/styles";
+import { showAlert } from "@/components/alert-modal";
 
 type PairingCodeScannerProps = { onScanned: (code: string) => void };
 
@@ -15,7 +16,7 @@ export function PairingCodeScanner({ onScanned }: PairingCodeScannerProps) {
         if (!permission?.granted) {
             const result = await requestPermission();
             if (!result.granted) {
-                Alert.alert("Camera permission required", "Allow camera access to scan a pairing code.");
+                showAlert("Camera permission required", "Allow camera access to scan a pairing code.");
                 return;
             }
         }
