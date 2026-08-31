@@ -94,14 +94,27 @@ export default function App() {
             if (type === "PENDING_PAIR_SUCC") {
                 setPage("pairPage");
                 updateStatus("ready", "Share your code to pair a device");
-            } else if (type === "PENDING_PAIR_FAIL" || type === "PAIR_FAIL" || type === "JOIN_ROOM_FAIL") {
+            } else if (type === "PENDING_PAIR_FAIL") {
+                const { error } = data;
+                Alert.alert("failed to register pairKey, " + error);
                 clearConnHistory();
-                setPage("pairPage");
+            } else if (type === "PAIR_FAIL") {
+                const { error } = data;
+                Alert.alert( "failed to pair device, " + error);
+            } else if (type === "JOIN_ROOM_FAIL") {
+                const { error } = data;
+                Alert.alert("failed to join room, " + error);
+                clearConnHistory();
             } else if (type === "PAIR_SUCC") {
                 storage.set("roomKey", data.roomKey);
-                sendSignal("JOIN_ROOM");
                 setPage("connectingPage");
                 updateStatus("waiting", "Pairing complete. Establishing connection");
+                webSocket.dispose();
+                webSocket = createWebSocket({
+                    type: "room",
+                    key: data.roomKey,
+                    onMessage: (type, data) => void handleSignal(type, data),
+                });
             } else if (type === "JOIN_ROOM_WAIT") {
                 setPage("joinRoomWaitPage");
                 updateStatus("waiting", "Waiting for the paired device");
@@ -129,24 +142,18 @@ export default function App() {
             console.log(next, text);
         };
 
-        const prepareJoinRoom = () => {
-            const roomKey = storage.get("roomKey");
-            if (roomKey) {
-                sendSignal("JOIN_ROOM");
-            } else {
-                const key = makePairKey();
-                setPairKey(key);
-                sendSignal("PENDING_PAIR", { pairKey: key });
-            }
-        };
-
         const clearConnHistory = () => {
             setTargetPairKey("");
             storage.remove("roomKey");
             setPage("pairPage");
             const freshKey = makePairKey();
             setPairKey(freshKey);
-            sendSignal("PENDING_PAIR", { pairKey: freshKey });
+            webSocket.dispose();
+            webSocket = createWebSocket({
+                type: "pair",
+                key: freshKey,
+                onMessage: (type, data) => void handleSignal(type, data),
+            });
             updateStatus("ready", "Ready to pair with another device");
         };
 
@@ -192,12 +199,6 @@ export default function App() {
             });
         };
 
-        const webSocket: ReturnType<typeof createWebSocket> = createWebSocket({
-            onConnecting: () => updateStatus("connecting", "Connecting to signaling server"),
-            onOpen: () => prepareJoinRoom(),
-            onMessage: (type, data) => void handleSignal(type, data),
-        });
-
         const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
             sendSignal,
             onRestartPeerConnection: () => webSocket.restart(),
@@ -241,6 +242,24 @@ export default function App() {
             }
             sendSignal("PAIR", { targetPairKey: targetKey.trim() });
             updateStatus("waiting", "Requesting a secure pairing");
+        }
+
+        let webSocket: ReturnType<typeof createWebSocket>;
+        const roomKey = storage.get("roomKey");
+        if (roomKey) {
+            webSocket = createWebSocket({
+                type: "room",
+                key: roomKey,
+                onMessage: (type, data) => void handleSignal(type, data),
+            });
+        } else {
+            const key = makePairKey();
+            setPairKey(key);
+            webSocket = createWebSocket({
+                type: "pair",
+                key,
+                onMessage: (type, data) => void handleSignal(type, data),
+            });
         }
 
         return () => {

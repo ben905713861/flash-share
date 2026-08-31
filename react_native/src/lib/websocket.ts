@@ -3,12 +3,14 @@ import storage from "./storage"
 const WS_HOST = "wss://local.wxb26.click:8011/ws";
 
 type WebSocketOptions = {
-    onConnecting: () => void;
-    onOpen: () => void;
+    type: "pair" | "room";
+    key: string;
+    onConnecting?: () => void;
+    onOpen?: () => void;
     onMessage: (type: string, data: any) => void;
 };
 
-export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOptions) => {
+export const createWebSocket = ({ type, key, onConnecting, onOpen, onMessage }: WebSocketOptions) => {
     let ws: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
@@ -38,12 +40,12 @@ export const createWebSocket = ({ onConnecting, onOpen, onMessage }: WebSocketOp
             return;
         }
         clearReconnectTimer();
-        onConnecting();
-        const socket = new WebSocket(WS_HOST);
+        onConnecting?.();
+        const socket = new WebSocket(`${WS_HOST}/${type}?${type}Key=${encodeURI(key)}`);
         ws = socket;
         socket.onopen = () => {
             clearReconnectTimer();
-            onOpen();
+            onOpen?.();
         };
         socket.onmessage = (event) => {
             let message: { type: string; data: unknown };

@@ -1,10 +1,9 @@
-- PENDING_PAIR：注册本机配对码，还没有建立设备关系。
-- PENDING_PAIR_SUCC：注册成功，界面可以展示二维码并接受其他设备配对。
+- PAIR：客户端连接 `/ws/pair?pairKey=<pairKey>`；配对码不再放在 WebSocket 消息中。首个连接收到 `PENDING_PAIR_SUCC` 并等待，第二个同码连接触发配对。
+- PENDING_PAIR_SUCC：当前配对码已注册，界面可以展示二维码并接受其他设备配对。
 - PENDING_PAIR_FAIL：配对码注册失败，客户端清理历史并重新生成配对码。
-- PAIR：使用对方的配对码发起配对。
-- PAIR_SUCC：服务端创建房间，并向两台设备发送同一个 roomKey。
-- PAIR_FAIL：目标配对码不存在、已失效或无法完成配对。
-- JOIN_ROOM：设备携带 roomKey 加入房间。
+- PAIR_SUCC：服务端创建房间，并向两台配对 WebSocket 下发同一个 `roomKey`。客户端持久化该值、关闭配对连接，然后连接 `/ws/room?roomKey=<roomKey>`。
+- PAIR_FAIL：目标配对码无法完成配对。
+- JOIN_ROOM：客户端使用 `/ws/room?roomKey=<roomKey>` 加入房间；`roomKey` 不再放在 WebSocket 消息中。
 - JOIN_ROOM_WAIT：当前只有一台设备进入房间。
 - JOIN_ROOM_SUCC：两台设备均已进入；服务端将第一台指定为 Offerer。
 - SDP：Offerer 发出的 WebRTC Offer。
