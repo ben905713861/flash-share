@@ -10,20 +10,21 @@
 	"migrations": [
 		{
 			"new_sqlite_classes": [
-				"MyDurableObject"
+				"PairingRoom",
+				"ChatRoom"
 			],
-			"tag": "v1"
+			"tag": "v2"
 		}
 	],
 	"durable_objects": {
 		"bindings": [
 			{
-				"class_name": "MyDurableObject",
-				"name": "MY_DURABLE_OBJECT"
-			},
-			{
 				"class_name": "ChatRoom",
 				"name": "CHAT_ROOM"
+			},
+			{
+				"class_name": "PairingRoom",
+				"name": "PAIRING"
 			}
 		]
 	},

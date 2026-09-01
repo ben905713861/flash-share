@@ -1,156 +1,237 @@
 import { DurableObject } from "cloudflare:workers";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
+const MAX_PAYLOAD_BYTES = 256 * 1024;
+const RATE_WINDOW_MS = 10_000;
+const MAX_MESSAGES = 60;
 
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
+type Message = { type?: string; data?: Record<string, unknown>; roomKey?: string };
 
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
-	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
+const textOf = (message: string | ArrayBuffer) => {
+	return typeof message === "string" ? message : new TextDecoder().decode(message);
+}
+
+
+function sendMsg(ws: WebSocket, type: string, data?: unknown) {
+	if (ws.readyState === WebSocket.OPEN) {
+		ws.send(JSON.stringify({ type, data }));
 	}
 }
 
-export class ChatRoom {
-	constructor(
-		private state: DurableObjectState,
-		private env: Env,
-	) {}
+function parse(message: string | ArrayBuffer): Message | null {
+	const text = textOf(message);
+	if (text.length > MAX_PAYLOAD_BYTES) {
+		return null;
+	}
+	try {
+		const value: unknown = JSON.parse(text);
+		return value && typeof value === "object" && !Array.isArray(value) ? value as Message : null;
+	} catch {
+		return null;
+	}
+}
+
+function http(status: number, body: string) {
+	return new Response(body, { status });
+}
+
+/** One independently-addressable DO per pairKey. */
+export class PairingRoom extends DurableObject<Env> {
+	private readonly state: DurableObjectState;
+	private readonly environment: Env;
+
+	constructor(state: DurableObjectState, env: Env) {
+		super(state, env); this.state = state;
+		this.environment = env;
+	}
 
 	async fetch(request: Request): Promise<Response> {
-		if (request.headers.get("Upgrade") !== "websocket") {
-			return new Response("Expected WebSocket", {
-				status: 426,
+		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+			return http(426, "Expected WebSocket");
+		}
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+
+		const anotherWs = this.state.getWebSockets()
+			.find(it => it.readyState === WebSocket.OPEN);
+		if (anotherWs) {
+			if (anotherWs === server) {
+				// scenario 1: ws uses same pair key to register multiple times
+				sendMsg(server, "PENDING_PAIR_SUCC");
+			} else {
+				// scenario 2: another ws uses an in-used pariKey to register
+				sendMsg(server, 'PENDING_PAIR_FAIL', { error: "pairKey is already registered" });
+				server.close();
+			}
+		} else {
+			this.state.acceptWebSocket(server);
+			const pairKey = new URL(request.url).searchParams.get("pairKey")!;
+			await this.state.storage.put("pairKey", pairKey);
+			sendMsg(server, "PENDING_PAIR_SUCC");
+		}
+		return new Response(null, { status: 101, webSocket: client });
+	}
+
+	async getPairKey(): Promise<string> {
+		const pairKey = await this.state.storage.get<string>("pairKey");
+		if (!pairKey) {
+			throw new Error("pairKey didn't bind to DO");
+		}
+		return pairKey;
+	}
+
+	async notifyPaired(roomKey: string): Promise<boolean> {
+		const ws: WebSocket | undefined = this.state.getWebSockets()
+			.find(it => it.readyState === WebSocket.OPEN);
+		if (ws) {
+			sendMsg(ws, "PAIR_SUCC", { roomKey });
+			return true;
+		}
+		return false;
+	}
+
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+		let reqBody;
+		try {
+			reqBody = JSON.parse(textOf(message));
+		} catch (e) {
+			if (e instanceof Error) {
+				console.error('invalid request body', textOf(message), e);
+				sendMsg(ws, 'ERROR', { error: 'invalid request body' });
+			}
+			return;
+		}
+		if (reqBody == null || reqBody instanceof Array) {
+			sendMsg(ws, "ERROR", { error: "invalid request body" });
+			return;
+		}
+		const { type, data } = reqBody;
+		if (!type) {
+			sendMsg(ws, "ERROR", { error: "Unsupported message on pair connection" });
+			return;
+		}
+		if (!data) {
+			sendMsg(ws, "ERROR", { error: "data cannot be null" });
+			return;
+		}
+		console.log("received type:", type);
+		if (type === 'PAIR') {
+			const { targetPairKey } = data;
+			await this.pair(ws, targetPairKey);
+		}
+	}
+
+	async pair(ws: WebSocket, targetPairKey?: string) {
+		if (!targetPairKey) {
+			sendMsg(ws, 'ERROR', { error: 'targetPairKey is missing' });
+			return;
+		}
+		try {
+			const targetStub = this.environment.PAIRING.getByName(targetPairKey);
+			const pairKey = await this.getPairKey();
+			if (pairKey === targetPairKey) {
+				sendMsg(ws, 'PAIR_FAIL', { error: "unable to pair with same ws。" });
+				return;
+			}
+			const roomKey = crypto.randomUUID();
+			const isPairSuccess = await targetStub.notifyPaired(roomKey);
+			if (!isPairSuccess) {
+				sendMsg(ws, 'PAIR_FAIL', { error: "pairKey is not registered." });
+				return;
+			}
+			sendMsg(ws, "PAIR_SUCC", { roomKey });
+		} catch (e) {
+			if (e instanceof Error) {
+				console.error('register pairKey failed', e);
+				sendMsg(ws, 'PAIR_FAIL', { error: e.message });
+			}
+		}
+	}
+
+}
+
+/** One independently-addressable DO per roomKey, limited to two peers. */
+export class ChatRoom extends DurableObject<Env> {
+	private readonly state: DurableObjectState;
+	constructor(state: DurableObjectState, env: Env) { super(state, env); this.state = state; }
+	private readonly rates = new WeakMap<WebSocket, { startedAt: number; count: number }>();
+
+	async fetch(request: Request): Promise<Response> {
+		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+			return http(426, "Expected WebSocket");
+		}
+		const existing = this.state.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN);
+		if (existing.length >= 2) {
+			return http(1013, "room is full");
+		}
+		const pair = new WebSocketPair();
+		this.state.acceptWebSocket(pair[1]);
+		const sockets = [...existing, pair[1]];
+		this.joinRoom(pair[1], sockets);
+		return new Response(null, { status: 101, webSocket: pair[0] });
+	}
+
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+		const now = Date.now(); const rate = this.rates.get(ws);
+		if (!rate || now - rate.startedAt >= RATE_WINDOW_MS) {
+			this.rates.set(ws, { startedAt: now, count: 1 });
+		} else if (++rate.count > MAX_MESSAGES) {
+			ws.close(1008, "Too many messages");
+			return;
+		}
+		const text = textOf(message);
+		if (text.length > MAX_PAYLOAD_BYTES) {
+			ws.close(1009, "Message too big");
+			return;
+		}
+		this.handleMessage(ws, text); return;
+	}
+
+	private handleMessage(ws: WebSocket, message: string | ArrayBuffer) {
+		const body = parse(message);
+		if (!body?.type) {
+			sendMsg(ws, "ERROR", { error: "invalid request body" });
+			return;
+		}
+		if (body.type === "JOIN_ROOM") {
+			return;
+		}
+		for (const peer of this.state.getWebSockets()) {
+			if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+				peer.send(textOf(message));
+			}
+		}
+	}
+	private joinRoom(ws: WebSocket, sockets: WebSocket[]) {
+		if (sockets.length === 1) {
+			sendMsg(ws, "JOIN_ROOM_WAIT");
+		} else {
+			sockets.forEach((item, index) => {
+				sendMsg(item, "JOIN_ROOM_SUCC", {isOfferer: index === 0})
 			});
 		}
-
-		const pair = new WebSocketPair();
-		const client = pair[0];
-		const server = pair[1];
-
-		// add ws to DO
-		this.state.acceptWebSocket(server);
-
-		server.serializeAttachment({
-			connectedAt: Date.now(),
-		});
-
-		server.send(
-			JSON.stringify({
-				type: "connected",
-				message: "WebSocket connected",
-			}),
-		);
-
-		return new Response(null, {
-			status: 101,
-			webSocket: client,
-		});
-	}
-
-	async webSocketMessage(
-		ws: WebSocket,
-		message: string | ArrayBuffer,
-	) {
-		const text =
-			typeof message === "string"
-				? message
-				: new TextDecoder().decode(message);
-
-		console.log("收到消息:", text);
-
-		// 获取当前 Durable Object 管理的所有 WebSocket
-		const sockets = this.state.getWebSockets();
-
-		for (const socket of sockets) {
-			// 不发送给自己
-			if (socket === ws) {
-				continue;
-			}
-
-			const info = socket.deserializeAttachment();
-
-			const { connectedAt } = info;
-
-			try {
-				socket.send(
-					JSON.stringify({
-						type: "message",
-						data: text,
-						connectedAt,
-					}),
-				);
-			} catch (error) {
-				console.error("发送失败:", error);
-			}
-		}
-	}
-
-	async webSocketClose(
-		ws: WebSocket,
-		code: number,
-		reason: string,
-		wasClean: boolean,
-	) {
-		console.log("WebSocket closed", {
-			code,
-			reason,
-			wasClean,
-		});
-	}
-
-	async webSocketError(
-		ws: WebSocket,
-		error: unknown,
-	) {
-		console.error("WebSocket error:", error);
 	}
 }
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
-		const url = new URL(request.url);
-
-		if (url.pathname === "/ws") {
-			if (request.headers.get("Upgrade") !== "websocket") {
-				return new Response("Expected WebSocket", { status: 426 });
-			}
-
-			// 根据 room 参数决定进入哪个房间
-			const room = url.searchParams.get("room") || "default";
-
-			const stub = env.CHAT_ROOM.getByName(room);
-
-			return stub.fetch(request);
+		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+			return http(426, "Expected WebSocket");
 		}
-
+		const url = new URL(request.url);
+		if (url.pathname === "/ws/pair") {
+			const pairKey = url.searchParams.get("pairKey");
+			if (!pairKey) {
+				return http(400, "pairKey is empty");
+			}
+			return env.PAIRING.getByName(pairKey).fetch(request);
+		}
+		if (url.pathname === "/ws/room") {
+			const roomKey = url.searchParams.get("roomKey");
+			if (!roomKey) {
+				return http(400, "roomKey is empty");
+			}
+			return env.CHAT_ROOM.getByName(roomKey).fetch(request);
+		}
 		return new Response("WebSocket Server");
 	},
 };
