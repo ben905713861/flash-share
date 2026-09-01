@@ -48,6 +48,10 @@ export class PairingRoom extends DurableObject<Env> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return http(426, "Expected WebSocket");
 		}
+		const isPaired = await this.state.storage.get<boolean>("isPaired");
+		if (isPaired) {
+			return http(409, "pairKey is already paired");
+		}
 		const pair = new WebSocketPair();
 		const [client, server] = Object.values(pair);
 
@@ -80,13 +84,20 @@ export class PairingRoom extends DurableObject<Env> {
 	}
 
 	async notifyPaired(roomKey: string): Promise<boolean> {
-		const ws: WebSocket | undefined = this.state.getWebSockets()
-			.find(it => it.readyState === WebSocket.OPEN);
-		if (ws) {
-			sendMsg(ws, "PAIR_SUCC", { roomKey });
-			return true;
-		}
-		return false;
+		return this.state.blockConcurrencyWhile(async () => {
+			const isPaired = await this.state.storage.get<boolean>("isPaired");
+			if (isPaired) {
+				return false;
+			}
+			const ws: WebSocket | undefined = this.state.getWebSockets()
+				.find(it => it.readyState === WebSocket.OPEN);
+			if (ws) {
+				await this.state.storage.put("isPaired", true);
+				sendMsg(ws, "PAIR_SUCC", { roomKey });
+				return true;
+			}
+			return false;
+		});
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
@@ -145,6 +156,10 @@ export class PairingRoom extends DurableObject<Env> {
 				sendMsg(ws, 'PAIR_FAIL', { error: e.message });
 			}
 		}
+	}
+
+	async webSocketClose(ws: WebSocket) {
+		await this.state.storage.delete("isPaired");
 	}
 
 }
