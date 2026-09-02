@@ -48,31 +48,26 @@ export class PairingRoom extends DurableObject<Env> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return http(426, "Expected WebSocket");
 		}
-		const isPaired = await this.state.storage.get<boolean>("isPaired");
-		if (isPaired) {
-			return http(409, "pairKey is already paired");
-		}
-		const pair = new WebSocketPair();
-		const [client, server] = Object.values(pair);
-
-		const anotherWs = this.state.getWebSockets()
-			.find(it => it.readyState === WebSocket.OPEN);
-		if (anotherWs) {
-			if (anotherWs === server) {
-				// scenario 1: ws uses same pair key to register multiple times
-				sendMsg(server, "PENDING_PAIR_SUCC");
-			} else {
-				// scenario 2: another ws uses an in-used pariKey to register
-				sendMsg(server, 'PENDING_PAIR_FAIL', { error: "pairKey is already registered" });
-				server.close();
+		return this.state.blockConcurrencyWhile(async () => {
+			const isPaired = await this.state.storage.get<boolean>("isPaired");
+			if (isPaired) {
+				return http(409, "pairKey is already paired");
 			}
-		} else {
+			const pair = new WebSocketPair();
+			const [client, server] = Object.values(pair);
+
+			const anotherWs = this.state.getWebSockets()
+				.find(it => it.readyState === WebSocket.OPEN);
+			if (anotherWs) {
+				// DO contains another ws, return error and exit
+				return http(409, "pairKey is already registered");
+			}
 			this.state.acceptWebSocket(server);
 			const pairKey = new URL(request.url).searchParams.get("pairKey")!;
 			await this.state.storage.put("pairKey", pairKey);
 			sendMsg(server, "PENDING_PAIR_SUCC");
-		}
-		return new Response(null, { status: 101, webSocket: client });
+			return new Response(null, { status: 101, webSocket: client });
+		});
 	}
 
 	async getPairKey(): Promise<string> {
@@ -136,13 +131,13 @@ export class PairingRoom extends DurableObject<Env> {
 			sendMsg(ws, 'ERROR', { error: 'targetPairKey is missing' });
 			return;
 		}
+		const pairKey = await this.getPairKey();
+		if (pairKey === targetPairKey) {
+			sendMsg(ws, 'PAIR_FAIL', { error: "unable to pair with same ws。" });
+			return;
+		}
 		try {
 			const targetStub = this.environment.PAIRING.getByName(targetPairKey);
-			const pairKey = await this.getPairKey();
-			if (pairKey === targetPairKey) {
-				sendMsg(ws, 'PAIR_FAIL', { error: "unable to pair with same ws。" });
-				return;
-			}
 			const roomKey = crypto.randomUUID();
 			const isPairSuccess = await targetStub.notifyPaired(roomKey);
 			if (!isPairSuccess) {
