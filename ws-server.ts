@@ -135,8 +135,32 @@ function handleMessage(ws: WebSocket, message: RawData) {
   }
   console.log("received type:", type);
   if (type === 'PAIR') {
-    const { targetPairKey } = data;
-    pair(ws, targetPairKey);
+    const { targetPairKey, passcode } = data;
+    pair(ws, targetPairKey, passcode);
+    return;
+  }
+  if (type === 'PAIR_CONFIRM') {
+    try {
+      const roomKey = roomService.createRoom();
+      const requestWs = pairService.pair(ws);
+      sendMsg(ws, 'PAIR_SUCC', { roomKey });
+      sendMsg(requestWs, 'PAIR_SUCC', { roomKey });
+    } catch (e) {
+      if (e instanceof Error) {
+        sendMsg(ws, 'ERROR', { error: e.message });
+      }
+    }
+    return;
+  }
+  if (type === 'PAIR_REJECT') {
+    try {
+      const requestWs = pairService.pair(ws);
+      sendMsg(requestWs, 'PAIR_REJECT');
+    } catch (e) {
+      if (e instanceof Error) {
+        sendMsg(ws, 'ERROR', { error: e.message });
+      }
+    }
     return;
   }
 
@@ -175,16 +199,18 @@ function pendingPair(ws: WebSocket) {
   sendMsg(ws, 'PENDING_PAIR_SUCC', { pairKey });
 }
 
-function pair(ws: WebSocket, targetPairKey?: string) {
+function pair(ws: WebSocket, targetPairKey?: string, passcode?: string) {
   if (!targetPairKey) {
-    sendMsg(ws, 'ERROR', { error: 'targetPairKey is missing' });
+    sendMsg(ws, 'PAIR_FAIL', { error: 'targetPairKey is missing' });
+    return;
+  }
+  if (!passcode) {
+    sendMsg(ws, 'PAIR_FAIL', { error: 'passcode is missing' });
     return;
   }
   try {
-    const targetWs: WebSocket = pairService.pair(targetPairKey, ws);
-    const roomKey = roomService.createRoom();
-    sendMsg(targetWs, 'PAIR_SUCC', { roomKey });
-    sendMsg(ws, 'PAIR_SUCC', { roomKey });
+    const targetWs: WebSocket = pairService.prePair(targetPairKey, ws);
+    sendMsg(targetWs, 'WAITING_PAIR_CONFIRM', { passcode });
   } catch (e) {
     if (e instanceof Error) {
       console.error('register pairKey failed', e);

@@ -21,7 +21,7 @@ export class PairService {
         return true;
     }
 
-    pair(pairKey: string, ws: WebSocket): WebSocket {
+    prePair(pairKey: string, ws: WebSocket): WebSocket {
         const pair: Pair | undefined = this.#wsPendingMap.get(pairKey);
         if (!pair) {
             throw new Error('pairKey is not registered.');
@@ -29,18 +29,46 @@ export class PairService {
         if (pair.ws === ws) {
             throw new Error('unable to pair with same ws.');
         }
-        this.#wsPendingMap.delete(pairKey);
-        this.#wsPendingMap2.delete(pair.ws);
+        const requesterPair = this.#wsPendingMap2.get(ws);
+        if (requesterPair?.prePairWs) {
+            throw new Error('device already has a pending pair request');
+        }
+        for (const pendingPair of this.#wsPendingMap.values()) {
+            if (pendingPair.prePairWs === ws) {
+                throw new Error('device already has a pending pair request');
+            }
+        }
+        if (pair.prePairWs) {
+            throw new Error('another device has sent pair request');
+        }
         if (pair.ws.readyState !== WebSocket.OPEN) {
             throw new Error('target ws is not opened.');
         }
+        pair.prePairWs = ws;
+        return pair.ws;
+    }
+
+    pair(ws: WebSocket): WebSocket {
+        const pair: Pair | undefined = this.#wsPendingMap2.get(ws);
+        if (!pair) {
+            throw new Error('pairKey is not registered.');
+        }
+        if (!pair.prePairWs) {
+            throw new Error('did not receive prePair request');
+        }
+        if (pair.prePairWs.readyState !== WebSocket.OPEN) {
+            pair.prePairWs = undefined;
+            throw new Error('target ws is not opened.');
+        }
+        this.#wsPendingMap.delete(pair.pairKey);
+        this.#wsPendingMap2.delete(pair.ws);
         // clear requester
-        const requesterPair: Pair | undefined = this.#wsPendingMap2.get(ws);
+        const requesterPair: Pair | undefined = this.#wsPendingMap2.get(pair.prePairWs);
         if (requesterPair) {
             this.#wsPendingMap.delete(requesterPair.pairKey);
             this.#wsPendingMap2.delete(requesterPair.ws);
         }
-        return pair.ws;
+        return pair.prePairWs;
     }
 
     unregister(ws: WebSocket) {
@@ -49,6 +77,11 @@ export class PairService {
             this.#wsPendingMap2.delete(ws);
             this.#wsPendingMap.delete(pair.pairKey);
         }
+        this.#wsPendingMap.forEach((pendingPair) => {
+            if (pendingPair.prePairWs === ws) {
+                pendingPair.prePairWs = undefined;
+            }
+        });
     }
 
     #clear() {
@@ -64,5 +97,6 @@ export class PairService {
 type Pair = {
     pairKey: string;
     ws: WebSocket;
+    prePairWs?: WebSocket;
     createTime: Date;
 }

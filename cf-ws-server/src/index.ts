@@ -78,17 +78,18 @@ export class PairingRoom extends DurableObject<Env> {
 		return pairKey;
 	}
 
-	async notifyPaired(roomKey: string): Promise<boolean> {
+	async notifyPaired(roomKey: string, passcode: string, requesterPairKey: string): Promise<boolean> {
 		return this.state.blockConcurrencyWhile(async () => {
 			const isPaired = await this.state.storage.get<boolean>("isPaired");
-			if (isPaired) {
+			const pending = await this.state.storage.get("pending");
+			if (isPaired || pending) {
 				return false;
 			}
 			const ws: WebSocket | undefined = this.state.getWebSockets()
 				.find(it => it.readyState === WebSocket.OPEN);
 			if (ws) {
-				await this.state.storage.put("isPaired", true);
-				sendMsg(ws, "PAIR_SUCC", { roomKey });
+				await this.state.storage.put("pending", { roomKey, requesterPairKey });
+				sendMsg(ws, "WAITING_PAIR_CONFIRM", { passcode });
 				return true;
 			}
 			return false;
@@ -121,14 +122,36 @@ export class PairingRoom extends DurableObject<Env> {
 		}
 		console.log("received type:", type);
 		if (type === 'PAIR') {
-			const { targetPairKey } = data;
-			await this.pair(ws, targetPairKey);
+			const { targetPairKey, passcode } = data;
+			await this.pair(ws, targetPairKey, passcode);
+			return;
+		}
+		if (type === 'PAIR_CONFIRM') {
+			const pending = await this.state.storage.get<{roomKey:string; requesterPairKey:string}>("pending");
+			if (!pending) { sendMsg(ws, "ERROR", {error:"no pending pair confirmation"}); return; }
+			const requester = this.environment.PAIRING.getByName(pending.requesterPairKey);
+			const notified = await requester.notifyConfirmed(pending.roomKey);
+			if (!notified) {
+				sendMsg(ws, "PAIR_FAIL", { error: "requesting device is no longer connected" });
+				await this.state.storage.delete("pending");
+				return;
+			}
+			await this.state.storage.put("isPaired", true);
+			await this.state.storage.delete("pending");
+			return;
+		}
+		if (type === 'PAIR_REJECT') {
+			const pending = await this.state.storage.get<{roomKey:string; requesterPairKey:string}>("pending");
+			if (!pending) { sendMsg(ws, "ERROR", {error:"no pending pair confirmation"}); return; }
+			const requester = this.environment.PAIRING.getByName(pending.requesterPairKey);
+			await requester.notifyRejected();
+			await this.state.storage.delete("pending");
 		}
 	}
 
-	async pair(ws: WebSocket, targetPairKey?: string) {
+	async pair(ws: WebSocket, targetPairKey?: string, passcode?: string) {
 		if (!targetPairKey) {
-			sendMsg(ws, 'ERROR', { error: 'targetPairKey is missing' });
+			sendMsg(ws, 'PAIR_FAIL', { error: 'targetPairKey is missing' });
 			return;
 		}
 		const pairKey = await this.getPairKey();
@@ -138,13 +161,14 @@ export class PairingRoom extends DurableObject<Env> {
 		}
 		try {
 			const targetStub = this.environment.PAIRING.getByName(targetPairKey);
+			if (!passcode) { sendMsg(ws, 'PAIR_FAIL', {error:'passcode is missing'}); return; }
 			const roomKey = crypto.randomUUID();
-			const isPairSuccess = await targetStub.notifyPaired(roomKey);
+			const isPairSuccess = await targetStub.notifyPaired(roomKey, passcode, pairKey);
 			if (!isPairSuccess) {
 				sendMsg(ws, 'PAIR_FAIL', { error: "pairKey is not registered." });
 				return;
 			}
-			sendMsg(ws, "PAIR_SUCC", { roomKey });
+			// requester is notified after confirmation
 		} catch (e) {
 			if (e instanceof Error) {
 				console.error('register pairKey failed', e);
@@ -153,8 +177,17 @@ export class PairingRoom extends DurableObject<Env> {
 		}
 	}
 
+	async notifyConfirmed(roomKey: string): Promise<boolean> {
+		const ws = this.state.getWebSockets().find(it => it.readyState === WebSocket.OPEN);
+		if (!ws) return false;
+		sendMsg(ws, "PAIR_SUCC", {roomKey});
+		return true;
+	}
+	async notifyRejected() { const ws = this.state.getWebSockets().find(it => it.readyState === WebSocket.OPEN); if (ws) sendMsg(ws, "PAIR_REJECT"); }
+
 	async webSocketClose(ws: WebSocket) {
 		await this.state.storage.delete("isPaired");
+		await this.state.storage.delete("pending");
 	}
 
 }

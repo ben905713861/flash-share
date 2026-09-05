@@ -23,7 +23,7 @@ import { PairDevice } from "@/components/pair-device";
 import { TextWorkspace } from "@/components/text-workspace";
 import { FileWorkspace } from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
-import { AlertModal, showAlert } from "@/components/alert-modal";
+import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
 import { C, s } from "@/styles";
 import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
@@ -94,6 +94,22 @@ export default function App() {
             } else if (type === "PAIR_FAIL") {
                 const { error } = data;
                 showAlert("Error", "failed to pair device, " + error);
+            }
+            else if (type === "WAITING_PAIR_CONFIRM") {
+                const passcode = String(data?.passcode ?? "");
+                showConfirm(
+                    "Pairing request",
+                    `Verification code: ${passcode}\nAccept this device pairing?`,
+                    () => sendSignal("PAIR_CONFIRM"),
+                    () => {
+                        sendSignal("PAIR_REJECT");
+                        clearConnHistory();
+                    },
+                );
+            } else if (type === "PAIR_REJECT") {
+                showAlert("Pairing rejected", "The other device rejected the pairing request.");
+                updateStatus("error", "Pairing rejected");
+                clearConnHistory();
             }
 
             else if (type === "PAIR_SUCC") {
@@ -237,7 +253,9 @@ export default function App() {
                 updateStatus("error", "Enter the other device's pairing code");
                 return;
             }
-            sendSignal("PAIR", { targetPairKey: targetKey.trim() });
+            const passcode = String(Math.floor(100000 + Math.random() * 900000));
+            sendSignal("PAIR", { targetPairKey: targetKey.trim(), passcode });
+            showAlert("Pairing verification code", `Your verification code is: ${passcode}`);
             updateStatus("waiting", "Requesting a secure pairing");
         }
 

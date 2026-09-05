@@ -52,7 +52,8 @@
             alert('targetPairKey cannot be null');
             return;
         }
-        sendMsg('PAIR', { targetPairKey });
+        const passcode = String(Math.floor(100000 + Math.random() * 900000));
+        sendMsg('PAIR', { targetPairKey, passcode });
     }
 
     function webrtcInit() {
@@ -522,6 +523,14 @@
             sendMsg("JOIN_ROOM");
         } else if (type === "PAIR_FAIL") {
             console.log('pair failed');
+        } else if (type === "WAITING_PAIR_CONFIRM") {
+            const accepted = window.confirm(`Pairing verification code: ${data?.passcode || ""}\nAccept this device?`);
+            sendMsg(accepted ? "PAIR_CONFIRM" : "PAIR_REJECT", {});
+            if (!accepted) {
+                clearConnHistory();
+            }
+        } else if (type === "PAIR_REJECT") {
+            window.alert("Pairing rejected by the other device");
             clearConnHistory();
         } else if (type === "JOIN_ROOM_WAIT") {
             console.log("waiting for other clients to join the room");

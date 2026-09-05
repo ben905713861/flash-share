@@ -28,6 +28,9 @@
 			}
 		]
 	},
+	"dev": {
+		"ip": "0.0.0.0"
+	},
 	"observability": {
 		"enabled": true
 	},
