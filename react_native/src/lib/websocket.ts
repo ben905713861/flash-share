@@ -1,5 +1,8 @@
-// const WS_HOST = "wss://local.wxb26.click:8011/ws";
-const WS_HOST = "ws://127.0.0.1:8787/ws";
+const WS_HOST = process.env.EXPO_PUBLIC_WS_URL?.replace(/\/$/, "");
+
+if (!WS_HOST) {
+    throw new Error("EXPO_PUBLIC_WS_URL is not configured");
+}
 
 type WebSocketOptions = {
     type: "pair" | "room";

@@ -1,3 +1,4 @@
+- 传输配置：React Native 客户端从 `react_native/.env.local` 的 `EXPO_PUBLIC_WS_URL` 读取 WebSocket 基地址，值必须包含 `/ws`。Wrangler 明文本地服务使用 `ws://`；根 `ws-server.ts` 使用证书并监听 `8787`，应使用 `wss://`。
 - PAIR：客户端连接 `/ws/pair`，服务端生成配对码并在 `PENDING_PAIR_SUCC` 中返回。首个连接等待，第二个使用同码连接触发配对。
 - PENDING_PAIR_SUCC：配对码已注册，`data.pairKey` 为服务端生成的配对码，界面可以展示并接受其他设备配对。
 - PAIR_SUCC：服务端创建房间，并向两台配对 WebSocket 下发同一个 `roomKey`。客户端持久化该值、关闭配对连接，然后连接 `/ws/room?roomKey=<roomKey>`。
@@ -10,3 +11,4 @@
 - ICE：双方交换 STUN 得到的网络候选地址，可以在 SDP 前后多次出现。
 - ERROR：非法消息、缺少 roomKey、设备不属于房间或转发异常。
 - EXIT：通知另一台设备退出；之后清理连接并回到初始流程。
+- 连接关闭：room 连接收到 `1008`（非法/无效 room 或限流）或 `1013`（服务容量或房间已满）时，客户端提示原因、清理持久化 `roomKey`，并回到配对流程；其他关闭原因按 WebSocket 客户端策略自动重连。

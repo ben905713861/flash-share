@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-- Root TypeScript services (`ws-server.ts`, `pair-service.ts`, `room-service.ts`, and `message-rate-service.ts`) provide WebSocket signaling and room logic. `webrtc.html` is the browser client, and `signal.MD` documents the protocol.
+- Root TypeScript services (`ws-server.ts`, `pair-service.ts`, `room-service.ts`, and `message-rate-service.ts`) provide WebSocket signaling and room logic. `webrtc.html` is the browser client, and `signal.md` documents the protocol.
 - `cf-ws-server/` contains the Cloudflare Worker in `src/index.ts`, Wrangler configuration, and generated binding types.
 - `react_native/` is the Expo Router client: screens in `src/app/`, UI in `src/components/`, shared services in `src/lib/`, native modules in `modules/`, Tauri code in `src-tauri/`, and assets in `assets/`.
 - Keep generated output and local credentials out of commits; review `.gitignore` before adding build artifacts.
@@ -11,9 +11,9 @@
 
 Run commands from the package directory they target:
 
-- Root server: `npm install`, then `npm start` runs `ws-server.ts` through `tsx`.
+- Root server: `npm install`, then `npm start` runs `ws-server.ts` through `tsx` on port `8787`. The root server uses the certificates in `cert/`, so clients must use a `wss://` URL.
 - Cloudflare Worker: `cd cf-ws-server; npm install; npm run dev` starts Wrangler locally; `npm run deploy` publishes; `npm run cf-typegen` refreshes types after binding changes.
-- Expo client: `cd react_native; npm install; npm start` starts Metro/Expo. Use `npm run android`, `npm run ios`, or `npm run web` for a platform target; `npm run lint` runs Expo ESLint.
+- Expo client: copy `react_native/.env.example` to `react_native/.env.local` and set `EXPO_PUBLIC_WS_URL` to the complete WebSocket base URL (including `/ws`), then run `cd react_native; npm install; npm start`. Use `npm run android`, `npm run ios`, or `npm run web` for a platform target; `npm run lint` runs Expo ESLint. `.env.local` is ignored and must not be committed.
 - No automated test runner is configured. Exercise pairing, room join/exit, and WebRTC signaling manually; run `npx tsc --noEmit` in the affected package when practical.
 
 ## Coding Style & Naming Conventions
@@ -30,4 +30,4 @@ Recent commits use short, lowercase, imperative descriptions (for example, `dele
 
 ## Security & Configuration Tips
 
-Do not commit private keys, certificates, tokens, or local `.env` files; `cert/` is environment-sensitive. Treat pairing keys, room keys, and WebSocket URLs as untrusted input, and verify changes against both the local server and Cloudflare Worker paths before deployment.
+Do not commit private keys, certificates, tokens, or local `.env` files; `cert/` is environment-sensitive. `EXPO_PUBLIC_WS_URL` is bundled into the client and is configuration, not a secret. Use `ws://` for a plain Wrangler local endpoint and `wss://` for the certificate-backed root server or production. Treat pairing keys, room keys, and WebSocket URLs as untrusted input, and verify changes against both the local server and Cloudflare Worker paths before deployment.

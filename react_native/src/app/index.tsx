@@ -247,6 +247,14 @@ export default function App() {
             webSocket = createWebSocket({
                 type: "room",
                 attachData: { roomKey },
+                onClose: (event) => {
+                    if (event.code === 1008 || event.code === 1013) {
+                        showAlert("Error", event.reason);
+                        clearConnHistory();
+                        return true;
+                    }
+                    return false;
+                },
                 onMessage: (type, data) => void handleSignal(type, data),
             });
         } else {

@@ -6,7 +6,7 @@ import RoomService from "./room-service";
 import {PairService} from "./pair-service";
 import MessageRateService from "./message-rate-service";
 
-const PORT = 8011;
+const PORT = 8787;
 const MAX_CONNECTIONS = 200;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 
@@ -92,9 +92,7 @@ wss.on("connection", (ws: WebSocket, request) => {
 });
 
 // HTTP + WebSocket 共用8011端口
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+server.listen(PORT);
 
 wss.on('listening', () => {
   console.log(`WebSocket server listening on ${PORT}`);
