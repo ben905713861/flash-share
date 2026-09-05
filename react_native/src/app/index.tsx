@@ -86,6 +86,9 @@ export default function App() {
     const pairRef = useRef<(targetKey: string) => void>(() => {});
 
     useEffect(() => {
+        let pairWebSocket: ReturnType<typeof createWebSocket> | undefined;
+        let roomWebSocket: ReturnType<typeof createWebSocket> | undefined;
+
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
                 setPairKey(data.pairKey);
@@ -100,9 +103,9 @@ export default function App() {
                 showConfirm(
                     "Pairing request",
                     `Verification code: ${passcode}\nAccept this device pairing?`,
-                    () => sendSignal("PAIR_CONFIRM"),
+                    () => sendPairSignal("PAIR_CONFIRM"),
                     () => {
-                        sendSignal("PAIR_REJECT");
+                        sendPairSignal("PAIR_REJECT");
                         clearConnHistory();
                     },
                 );
@@ -116,20 +119,8 @@ export default function App() {
                 storage.set("roomKey", data.roomKey);
                 setPage("connectingPage");
                 updateStatus("waiting", "Pairing complete. Establishing connection");
-                webSocket.dispose();
-                webSocket = createWebSocket({
-                    type: "room",
-                    attachData: { roomKey: data.roomKey },
-                    onClose: (event) => {
-                        if (event.code === 1008 || event.code === 1013) {
-                            showAlert("Error", event.reason);
-                            clearConnHistory();
-                            return true;
-                        }
-                        return false;
-                    },
-                    onMessage: (type, data) => void handleSignal(type, data),
-                });
+                pairWebSocket?.dispose();
+                createRoomWs(data.roomKey);
             } else if (type === "JOIN_ROOM_WAIT") {
                 setPage("joinRoomWaitPage");
                 updateStatus("waiting", "Waiting for the paired device");
@@ -147,8 +138,12 @@ export default function App() {
             }
         };
 
-        const sendSignal = (type: string, data: unknown = {}) => {
-            webSocket.send(type, data);
+        const sendPairSignal = (type: string, data: unknown = {}) => {
+            pairWebSocket?.send(type, data);
+        };
+
+        const sendRoomSignal = (type: string, data: unknown = {}) => {
+            roomWebSocket?.send(type, data);
         };
 
         const addActivity = (_entry: string) => undefined;
@@ -157,16 +152,41 @@ export default function App() {
             console.log(next, text);
         };
 
-        const clearConnHistory = () => {
-            setTargetPairKey("");
-            storage.remove("roomKey");
-            setPage("pairPage");
-            webSocket.dispose();
-            webSocket = createWebSocket({
+        const createPairWs = () => {
+            roomWebSocket?.dispose();
+            roomWebSocket = undefined;
+            pairWebSocket?.dispose();
+            pairWebSocket = createWebSocket({
                 type: "pair",
                 attachData: {},
                 onMessage: (type, data) => void handleSignal(type, data),
             });
+        };
+
+        const createRoomWs = (roomKey: string) => {
+            pairWebSocket?.dispose();
+            pairWebSocket = undefined;
+            roomWebSocket?.dispose();
+            roomWebSocket = createWebSocket({
+                type: "room",
+                attachData: { roomKey },
+                onClose: (event) => {
+                    if (event.code === 1008 || event.code === 1013) {
+                        showAlert("Error", event.reason);
+                        clearConnHistory();
+                        return true;
+                    }
+                    return false;
+                },
+                onMessage: (type, data) => void handleSignal(type, data),
+            });
+        };
+
+        const clearConnHistory = () => {
+            setTargetPairKey("");
+            storage.remove("roomKey");
+            setPage("pairPage");
+            createPairWs();
             updateStatus("ready", "Ready to pair with another device");
         };
 
@@ -213,8 +233,8 @@ export default function App() {
         };
 
         const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
-            sendSignal,
-            onRestartPeerConnection: () => webSocket.restart(),
+            sendSignal: sendRoomSignal,
+            onRestartPeerConnection: () => roomWebSocket?.restart(),
             updateStatus,
             onPeerConnectionState: (nextState) => {
                 if (nextState === "connected" || nextState === "completed") {
@@ -235,10 +255,13 @@ export default function App() {
 
         sendTextRef.current = webRTC.sendText;
         sendFileRef.current = webRTC.sendFile;
-        exitSignalRef.current = () => sendSignal("EXIT");
+        exitSignalRef.current = () => sendRoomSignal("EXIT");
         disconnectRef.current = () => {
             webRTC.dispose();
-            webSocket.dispose();
+            pairWebSocket?.dispose();
+            pairWebSocket = undefined;
+            roomWebSocket?.dispose();
+            roomWebSocket = undefined;
         };
         acceptFileRef.current = async () => {
             setReceiveDialogOpen(false);
@@ -254,33 +277,17 @@ export default function App() {
                 return;
             }
             const passcode = String(Math.floor(100000 + Math.random() * 900000));
-            sendSignal("PAIR", { targetPairKey: targetKey.trim(), passcode });
+            sendPairSignal("PAIR", { targetPairKey: targetKey.trim(), passcode });
             showAlert("Pairing verification code", `Your verification code is: ${passcode}`);
             updateStatus("waiting", "Requesting a secure pairing");
         }
 
-        let webSocket: ReturnType<typeof createWebSocket>;
+
         const roomKey = storage.get("roomKey");
         if (roomKey) {
-            webSocket = createWebSocket({
-                type: "room",
-                attachData: { roomKey },
-                onClose: (event) => {
-                    if (event.code === 1008 || event.code === 1013) {
-                        showAlert("Error", event.reason);
-                        clearConnHistory();
-                        return true;
-                    }
-                    return false;
-                },
-                onMessage: (type, data) => void handleSignal(type, data),
-            });
+            createRoomWs(roomKey);
         } else {
-            webSocket = createWebSocket({
-                type: "pair",
-                attachData: {},
-                onMessage: (type, data) => void handleSignal(type, data),
-            });
+            createPairWs();
         }
 
         return () => {
