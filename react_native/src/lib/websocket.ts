@@ -1,16 +1,22 @@
-import storage from "./storage"
-
-const WS_HOST = "wss://local.wxb26.click:8011/ws";
+// const WS_HOST = "wss://local.wxb26.click:8011/ws";
+const WS_HOST = "ws://127.0.0.1:8787/ws";
 
 type WebSocketOptions = {
     type: "pair" | "room";
-    key: string;
+    attachData: Record<string, string>,
     onConnecting?: () => void;
     onOpen?: () => void;
+    onClose?: (event: CloseEvent) => void;
     onMessage: (type: string, data: any) => void;
 };
 
-export const createWebSocket = ({ type, key, onConnecting, onOpen, onMessage }: WebSocketOptions) => {
+export const createWebSocket = ({
+                                    type,
+                                    attachData,
+                                    onConnecting,
+                                    onClose,
+                                    onOpen,
+                                    onMessage }: WebSocketOptions) => {
     let ws: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
@@ -41,7 +47,13 @@ export const createWebSocket = ({ type, key, onConnecting, onOpen, onMessage }: 
         }
         clearReconnectTimer();
         onConnecting?.();
-        const socket = new WebSocket(`${WS_HOST}/${type}?${type}Key=${encodeURI(key)}`);
+        let queryParameterString: string = "?";
+        for (const key in attachData) {
+            queryParameterString += encodeURI(key) + "=" + encodeURI(attachData[key]) + "&";
+        }
+        queryParameterString = queryParameterString.substring(0, queryParameterString.length - 1);
+
+        const socket = new WebSocket(`${WS_HOST}/${type}${queryParameterString}`);
         ws = socket;
         socket.onopen = () => {
             clearReconnectTimer();
@@ -58,7 +70,11 @@ export const createWebSocket = ({ type, key, onConnecting, onOpen, onMessage }: 
             onMessage(message.type, message.data);
         };
         socket.onerror = () => socket.close();
-        socket.onclose = () => {
+        socket.onclose = (event: CloseEvent) => {
+            const skip = onClose?.(event) ?? false;
+            if (skip) {
+                return;
+            }
             if (ws === socket) {
                 ws = null;
             }
@@ -68,7 +84,7 @@ export const createWebSocket = ({ type, key, onConnecting, onOpen, onMessage }: 
 
     const send = (type: string, data: unknown = {}): boolean => {
         if (ws?.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type, data, roomKey: storage.get("roomKey") }));
+            ws.send(JSON.stringify({ type, data }));
             return true;
         }
         console.warn(`Signaling message not sent because WebSocket is not open: ${type}`);

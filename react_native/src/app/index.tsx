@@ -28,10 +28,6 @@ import { C, s } from "@/styles";
 import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
 
-const makePairKey = () => {
-    return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
-}
-
 const hasDuplicateFilenames = (files: TransferFile[]) => {
     const names = new Set<string>();
     for (const file of files) {
@@ -92,27 +88,30 @@ export default function App() {
     useEffect(() => {
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
+                setPairKey(data.pairKey);
                 setPage("pairPage");
                 updateStatus("ready", "Share your code to pair a device");
-            } else if (type === "PENDING_PAIR_FAIL") {
-                const { error } = data;
-                showAlert("Error", "failed to register pairKey, " + error);
-                clearConnHistory();
             } else if (type === "PAIR_FAIL") {
                 const { error } = data;
                 showAlert("Error", "failed to pair device, " + error);
-            } else if (type === "JOIN_ROOM_FAIL") {
-                const { error } = data;
-                showAlert("Error", "failed to join room, " + error);
-                clearConnHistory();
-            } else if (type === "PAIR_SUCC") {
+            }
+
+            else if (type === "PAIR_SUCC") {
                 storage.set("roomKey", data.roomKey);
                 setPage("connectingPage");
                 updateStatus("waiting", "Pairing complete. Establishing connection");
                 webSocket.dispose();
                 webSocket = createWebSocket({
                     type: "room",
-                    key: data.roomKey,
+                    attachData: { roomKey: data.roomKey },
+                    onClose: (event) => {
+                        if (event.code === 1008 || event.code === 1013) {
+                            showAlert("Error", event.reason);
+                            clearConnHistory();
+                            return true;
+                        }
+                        return false;
+                    },
                     onMessage: (type, data) => void handleSignal(type, data),
                 });
             } else if (type === "JOIN_ROOM_WAIT") {
@@ -146,12 +145,10 @@ export default function App() {
             setTargetPairKey("");
             storage.remove("roomKey");
             setPage("pairPage");
-            const freshKey = makePairKey();
-            setPairKey(freshKey);
             webSocket.dispose();
             webSocket = createWebSocket({
                 type: "pair",
-                key: freshKey,
+                attachData: {},
                 onMessage: (type, data) => void handleSignal(type, data),
             });
             updateStatus("ready", "Ready to pair with another device");
@@ -249,15 +246,13 @@ export default function App() {
         if (roomKey) {
             webSocket = createWebSocket({
                 type: "room",
-                key: roomKey,
+                attachData: { roomKey },
                 onMessage: (type, data) => void handleSignal(type, data),
             });
         } else {
-            const key = makePairKey();
-            setPairKey(key);
             webSocket = createWebSocket({
                 type: "pair",
-                key,
+                attachData: {},
                 onMessage: (type, data) => void handleSignal(type, data),
             });
         }

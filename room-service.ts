@@ -67,6 +67,14 @@ export default class RoomService {
         return room.wsList;
     }
 
+    getOtherRoomWs(ws: WebSocket): WebSocket[] {
+        const room: Room | undefined = this.#ws2roomMap.get(ws);
+        if (!room) {
+            throw new Error("Unable to fetch room info, roomKey does not exist");
+        }
+        return room.wsList;
+    }
+
     leaveRoom(ws: WebSocket) {
         const room: Room | undefined = this.#ws2roomMap.get(ws);
         if (room) {

@@ -12,24 +12,13 @@ export class PairService {
     register(pairKey: string, ws: WebSocket) {
         let pair: Pair | undefined = this.#wsPendingMap.get(pairKey);
         if (pair) {
-            if (pair.ws === ws) {
-                // scenario 1: ws uses same pair key to register multiple times
-                return;
-            } else {
-                // scenario 2: another ws uses an in-used pariKey to register
-                throw new Error('register failed, pairKey is already registered.');
-            }
+            console.warn("pairKey is already in used, pairKey=", pairKey);
+            return false;
         }
-        pair = this.#wsPendingMap2.get(ws);
-        // scenario 3: same ws uses a new pairKey, clear and refresh
-        if (pair && pair.pairKey !== pairKey) {
-            this.#wsPendingMap.delete(pair.pairKey);
-        }
-        // scenario 4, diff key, diff ws.
         pair = { pairKey, ws, createTime: new Date() }
         this.#wsPendingMap.set(pairKey, pair);
         this.#wsPendingMap2.set(ws, pair);
-        console.log("#wsPendingMap", this.#wsPendingMap.keys())
+        return true;
     }
 
     pair(pairKey: string, ws: WebSocket): WebSocket {

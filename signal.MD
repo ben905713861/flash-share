@@ -1,6 +1,5 @@
-- PAIR：客户端连接 `/ws/pair?pairKey=<pairKey>`；配对码不再放在 WebSocket 消息中。首个连接收到 `PENDING_PAIR_SUCC` 并等待，第二个同码连接触发配对。
-- PENDING_PAIR_SUCC：当前配对码已注册，界面可以展示二维码并接受其他设备配对。
-- PENDING_PAIR_FAIL：配对码注册失败，客户端清理历史并重新生成配对码。
+- PAIR：客户端连接 `/ws/pair`，服务端生成配对码并在 `PENDING_PAIR_SUCC` 中返回。首个连接等待，第二个使用同码连接触发配对。
+- PENDING_PAIR_SUCC：配对码已注册，`data.pairKey` 为服务端生成的配对码，界面可以展示并接受其他设备配对。
 - PAIR_SUCC：服务端创建房间，并向两台配对 WebSocket 下发同一个 `roomKey`。客户端持久化该值、关闭配对连接，然后连接 `/ws/room?roomKey=<roomKey>`。
 - PAIR_FAIL：目标配对码无法完成配对。
 - JOIN_ROOM：客户端使用 `/ws/room?roomKey=<roomKey>` 加入房间；`roomKey` 不再放在 WebSocket 消息中。

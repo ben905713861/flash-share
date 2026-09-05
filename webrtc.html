@@ -513,10 +513,8 @@
 
     function webRTCSwap(type, data) {
         if (type === "PENDING_PAIR_SUCC") {
+            document.getElementById("pairKey").value = data.pairKey;
             console.log("PENDING_PAIR_SUCC");
-        } else if (type === "PENDING_PAIR_FAIL") {
-            console.log('register pair failed');
-            clearConnHistory();
         } else if (type === "PAIR_SUCC") {
             console.log('pair success');
             const { roomKey } = data;
@@ -567,8 +565,6 @@
         const roomKey = localStorage.getItem('roomKey');
         if (roomKey) {
             sendMsg("JOIN_ROOM");
-        } else {
-            registerPairKey();
         }
     }
 
@@ -610,32 +606,15 @@
         }
     }
 
-    function initPairKey() {
-        if (crypto.randomUUID) {
-            document.getElementById("pairKey").value = crypto.randomUUID();
-        } else {
-            document.getElementById("pairKey").value = Math.random().toString(16);
-        }
-    }
-
-    function registerPairKey() {
-        const pairKey = document.getElementById("pairKey").value;
-        if (pairKey) {
-            sendMsg("PENDING_PAIR", { pairKey });
-        }
-    }
-
     function clearConnHistory() {
         document.getElementById("targetPairKey").value = "";
         localStorage.clear();
-        initPairKey();
-        registerPairKey();
+        ws?.close();
     }
 
     (function () {
         const roomKey = localStorage.getItem("roomKey");
         if (!roomKey) {
-            initPairKey();
             localStorage.clear();
         }
 

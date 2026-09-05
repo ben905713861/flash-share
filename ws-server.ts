@@ -1,6 +1,7 @@
 import {WebSocketServer, WebSocket, RawData} from 'ws';
 import https from "https";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import RoomService from "./room-service";
 import {PairService} from "./pair-service";
 import MessageRateService from "./message-rate-service";
@@ -39,12 +40,6 @@ wss.on("connection", (ws: WebSocket, request) => {
   const url = new URL(request.url.toString(), `https://${request.headers.host}`);
 
   if (url.pathname === "/ws/pair") {
-    const pairKey = url.searchParams.get("pairKey");
-    if (!pairKey) {
-      ws.close(1008, "pairKey is empty");
-      return;
-    }
-
     ws.on("message", (message) => {
       if (messageRateService.isRateLimited(ws)) {
         ws.close(1008, "Too many messages");
@@ -54,12 +49,18 @@ wss.on("connection", (ws: WebSocket, request) => {
       handleMessage(ws, message);
     });
 
-    pendingPair(ws, pairKey);
+    pendingPair(ws);
 
   } else if (url.pathname === "/ws/room") {
     const roomKey = url.searchParams.get("roomKey");
     if (!roomKey) {
       ws.close(1008, "roomKey is empty");
+      return;
+    }
+    try {
+      roomService.validateRoomKey(roomKey);
+    } catch (e) {
+      ws.close(1008, "invalided roomKey");
       return;
     }
 
@@ -141,24 +142,11 @@ function handleMessage(ws: WebSocket, message: RawData) {
     return;
   }
 
-  const { roomKey } = reqBody;
-  if (!roomKey) {
-    console.warn('roomKey is missing');
-    sendMsg(ws, 'ERROR', { error: 'roomKey is missing' });
-    return;
-  }
-  try {
-    roomService.validateRoomKey(roomKey);
-  } catch (e) {
-    const error = e instanceof Error ? e.message : 'Invalid roomKey';
-    console.warn('roomKey validation failed', error);
-    sendMsg(ws, type === 'JOIN_ROOM' ? 'JOIN_ROOM_FAIL' : 'ERROR', { error });
-    return;
-  }
+  console.log("received ws.url: ", ws.url);
 
   // other types
   try {
-    const roomWsList: WebSocket[] = roomService.getRoomWsList(roomKey);
+    const roomWsList: WebSocket[] = roomService.getOtherRoomWs(ws);
     if (roomWsList.indexOf(ws) < 0) {
       sendMsg(ws, 'ERROR', { error: 'roomKey does not match ws' });
       return;
@@ -177,17 +165,16 @@ function handleMessage(ws: WebSocket, message: RawData) {
   }
 }
 
-function pendingPair(ws: WebSocket, pairKey: string) {
-  try {
-    pairService.register(pairKey, ws);
-    sendMsg(ws, 'PENDING_PAIR_SUCC');
-  } catch (e) {
-    if (e instanceof Error) {
-      console.error('register pairKey failed', e);
-      sendMsg(ws, 'PENDING_PAIR_FAIL', { error: e.message });
-      ws.close();
+function pendingPair(ws: WebSocket) {
+  let pairKey: string;
+  while (true) {
+    pairKey = randomUUID();
+    const registerResult = pairService.register(pairKey, ws);
+    if (registerResult) {
+      break;
     }
   }
+  sendMsg(ws, 'PENDING_PAIR_SUCC', { pairKey });
 }
 
 function pair(ws: WebSocket, targetPairKey?: string) {
@@ -222,7 +209,7 @@ function joinRoom(ws: WebSocket, roomKey: string) {
   } catch (e) {
     if (e instanceof Error) {
       console.error('join room error', e);
-      sendMsg(ws, 'JOIN_ROOM_FAIL', { error: e.message });
+      ws.close(1008, "failed to join room, " + e.message);
     }
   }
 }

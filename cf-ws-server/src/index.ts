@@ -65,7 +65,7 @@ export class PairingRoom extends DurableObject<Env> {
 			this.state.acceptWebSocket(server);
 			const pairKey = new URL(request.url).searchParams.get("pairKey")!;
 			await this.state.storage.put("pairKey", pairKey);
-			sendMsg(server, "PENDING_PAIR_SUCC");
+			sendMsg(server, "PENDING_PAIR_SUCC", { pairKey });
 			return new Response(null, { status: 101, webSocket: client });
 		});
 	}
@@ -229,11 +229,10 @@ export default {
 		}
 		const url = new URL(request.url);
 		if (url.pathname === "/ws/pair") {
-			const pairKey = url.searchParams.get("pairKey");
-			if (!pairKey) {
-				return http(400, "pairKey is empty");
-			}
-			return env.PAIRING.getByName(pairKey).fetch(request);
+			const pairKey = crypto.randomUUID();
+			const pairUrl = new URL(request.url);
+			pairUrl.searchParams.set("pairKey", pairKey);
+			return env.PAIRING.getByName(pairKey).fetch(new Request(pairUrl, request));
 		}
 		if (url.pathname === "/ws/room") {
 			const roomKey = url.searchParams.get("roomKey");
