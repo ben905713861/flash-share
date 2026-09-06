@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import {randomUUID} from "crypto";
 
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 const RATE_WINDOW_MS = 10_000;
@@ -63,11 +64,19 @@ export class PairingRoom extends DurableObject<Env> {
 				return http(409, "pairKey is already registered");
 			}
 			this.state.acceptWebSocket(server);
+
 			const pairKey = new URL(request.url).searchParams.get("pairKey")!;
 			await this.state.storage.put("pairKey", pairKey);
+
 			sendMsg(server, "PENDING_PAIR_SUCC", { pairKey });
 			return new Response(null, { status: 101, webSocket: client });
 		});
+	}
+
+	async checkPairKeyExist(): Promise<boolean> {
+		const wsList = this.state.getWebSockets()
+			.filter(it => it.readyState === WebSocket.OPEN);
+		return wsList.length > 0;
 	}
 
 	async getPairKey(): Promise<string> {
@@ -80,7 +89,7 @@ export class PairingRoom extends DurableObject<Env> {
 
 	async notifyPaired(roomKey: string, passcode: string, requesterPairKey: string): Promise<boolean> {
 		return this.state.blockConcurrencyWhile(async () => {
-			const isPaired = await this.state.storage.get<boolean>("isPaired");
+			const isPaired = await this.state.storage.get<boolean>("isPaired") ?? false;
 			const pending = await this.state.storage.get("pending");
 			if (isPaired || pending) {
 				return false;
@@ -159,9 +168,12 @@ export class PairingRoom extends DurableObject<Env> {
 			sendMsg(ws, 'PAIR_FAIL', { error: "unable to pair with same ws。" });
 			return;
 		}
+		if (!passcode) {
+			sendMsg(ws, 'PAIR_FAIL', {error:'passcode is missing'});
+			return;
+		}
 		try {
 			const targetStub = this.environment.PAIRING.getByName(targetPairKey);
-			if (!passcode) { sendMsg(ws, 'PAIR_FAIL', {error:'passcode is missing'}); return; }
 			const roomKey = crypto.randomUUID();
 			const isPairSuccess = await targetStub.notifyPaired(roomKey, passcode, pairKey);
 			if (!isPairSuccess) {
@@ -255,6 +267,20 @@ export class ChatRoom extends DurableObject<Env> {
 	}
 }
 
+async function pendingPair(request: Request, env: Env) {
+	let pairKey: string;
+	while (true) {
+		pairKey = randomUUID();
+		const pairService = env.PAIRING.getByName(pairKey);
+		const registerResult = await pairService.checkPairKeyExist();
+		if (!registerResult) {
+			const pairUrl = new URL(request.url);
+			pairUrl.searchParams.set("pairKey", pairKey);
+			return pairService.fetch(new Request(pairUrl, request));
+		}
+	}
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
@@ -262,10 +288,7 @@ export default {
 		}
 		const url = new URL(request.url);
 		if (url.pathname === "/ws/pair") {
-			const pairKey = crypto.randomUUID();
-			const pairUrl = new URL(request.url);
-			pairUrl.searchParams.set("pairKey", pairKey);
-			return env.PAIRING.getByName(pairKey).fetch(new Request(pairUrl, request));
+			return pendingPair(request, env);
 		}
 		if (url.pathname === "/ws/room") {
 			const roomKey = url.searchParams.get("roomKey");
