@@ -1,7 +1,8 @@
 - 传输配置：React Native 客户端从 `react_native/.env.local` 的 `EXPO_PUBLIC_WS_URL` 读取 WebSocket 基地址，值必须包含 `/ws`。Wrangler 明文本地服务使用 `ws://`；根 `ws-server.ts` 使用证书并监听 `8787`，应使用 `wss://`。
-- PAIR：客户端连接 `/ws/pair`，服务端生成配对码并在 `PENDING_PAIR_SUCC` 中返回。发起方发送 `targetPairKey` 与本机随机 `passcode`，匹配后等待对端确认。
+- PAIR：客户端连接 `/ws/pair`，服务端生成配对码并在 `PENDING_PAIR_SUCC` 中返回。发起方先断开原连接，再连接 `/ws/pair?targetPairKey=<targetPairKey>&passcode=<passcode>`；`targetPairKey` 与前端生成的六码 `passcode` 均为必填查询参数，服务端据此通知目标设备确认。
 - PENDING_PAIR_SUCC：配对码已注册，`data.pairKey` 为服务端生成的配对码，界面可以展示并接受其他设备配对。
-- WAITING_PAIR_CONFIRM：服务端通知被匹配设备确认请求，`data.passcode` 为发起方随机口令。设备回复 `PAIR_CONFIRM` 或 `PAIR_REJECT`。
+- PAIR_STARTED：服务端已向目标设备发出配对请求，`data.passcode` 为前端生成并通过连接 URL 传入的验证码，发起方展示该验证码。
+- WAITING_PAIR_CONFIRM：服务端通知被匹配设备确认请求，`data.passcode` 为前端生成并通过发起方连接 URL 传入的验证码。设备回复 `PAIR_CONFIRM` 或 `PAIR_REJECT`。
 - PAIR_CONFIRM：对端同意后，服务端创建房间并向两台配对 WebSocket 下发同一个 `roomKey`。客户端持久化该值、关闭配对连接，然后连接 `/ws/room?roomKey=<roomKey>`。
 - PAIR_REJECT：对端拒绝，服务端转发给发起方。
 - PAIR_FAIL：目标配对码无法完成配对。

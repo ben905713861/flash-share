@@ -49,7 +49,17 @@ wss.on("connection", (ws: WebSocket, request) => {
       handleMessage(ws, message);
     });
 
-    pendingPair(ws);
+    const targetPairKey = url.searchParams.get("targetPairKey");
+    if (targetPairKey) {
+      const passcode = url.searchParams.get("passcode");
+      if (!passcode) {
+        sendMsg(ws, 'PAIR_FAIL', { error: 'passcode is missing' });
+        return;
+      }
+      pair(ws, targetPairKey, passcode);
+    } else {
+      pendingPair(ws);
+    }
 
   } else if (url.pathname === "/ws/room") {
     const roomKey = url.searchParams.get("roomKey");
@@ -134,11 +144,6 @@ function handleMessage(ws: WebSocket, message: RawData) {
     return;
   }
   console.log("received type:", type);
-  if (type === 'PAIR') {
-    const { targetPairKey, passcode } = data;
-    pair(ws, targetPairKey, passcode);
-    return;
-  }
   if (type === 'PAIR_CONFIRM') {
     try {
       const roomKey = roomService.createRoom();
@@ -199,17 +204,10 @@ function pendingPair(ws: WebSocket) {
   sendMsg(ws, 'PENDING_PAIR_SUCC', { pairKey });
 }
 
-function pair(ws: WebSocket, targetPairKey?: string, passcode?: string) {
-  if (!targetPairKey) {
-    sendMsg(ws, 'PAIR_FAIL', { error: 'targetPairKey is missing' });
-    return;
-  }
-  if (!passcode) {
-    sendMsg(ws, 'PAIR_FAIL', { error: 'passcode is missing' });
-    return;
-  }
+function pair(ws: WebSocket, targetPairKey: string, passcode: string) {
   try {
     const targetWs: WebSocket = pairService.prePair(targetPairKey, ws);
+    sendMsg(ws, 'PAIR_STARTED', { passcode });
     sendMsg(targetWs, 'WAITING_PAIR_CONFIRM', { passcode });
   } catch (e) {
     if (e instanceof Error) {

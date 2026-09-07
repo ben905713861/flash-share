@@ -69,6 +69,10 @@ export class PairingRoom extends DurableObject<Env> {
 			await this.state.storage.put("pairKey", pairKey);
 
 			sendMsg(server, "PENDING_PAIR_SUCC", { pairKey });
+			const targetPairKey = new URL(request.url).searchParams.get("targetPairKey");
+			if (targetPairKey) {
+				await this.pair(server, targetPairKey);
+			}
 			return new Response(null, { status: 101, webSocket: client });
 		});
 	}
@@ -136,11 +140,6 @@ export class PairingRoom extends DurableObject<Env> {
 			return;
 		}
 		console.log("received type:", type);
-		if (type === 'PAIR') {
-			const { targetPairKey, passcode } = data;
-			await this.pair(ws, targetPairKey, passcode);
-			return;
-		}
 		if (type === 'PAIR_CONFIRM') {
 			const pending = await this.state.storage.get<{roomKey:string; requesterPairKey:string}>("pending");
 			if (!pending) { sendMsg(ws, "ERROR", {error:"no pending pair confirmation"}); return; }
@@ -164,7 +163,7 @@ export class PairingRoom extends DurableObject<Env> {
 		}
 	}
 
-	async pair(ws: WebSocket, targetPairKey?: string, passcode?: string) {
+	async pair(ws: WebSocket, targetPairKey?: string, passcode = String(Math.floor(100000 + Math.random() * 900000))) {
 		if (!targetPairKey) {
 			sendMsg(ws, 'PAIR_FAIL', { error: 'targetPairKey is missing' });
 			return;
@@ -186,6 +185,7 @@ export class PairingRoom extends DurableObject<Env> {
 				sendMsg(ws, 'PAIR_FAIL', { error: prePareResult });
 				return;
 			}
+			sendMsg(ws, 'PAIR_STARTED', { passcode });
 			// requester is notified after confirmation
 		} catch (e) {
 			if (e instanceof Error) {

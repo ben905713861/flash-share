@@ -6,7 +6,7 @@ if (!WS_HOST) {
 
 type WebSocketOptions = {
     type: "pair" | "room";
-    attachData: Record<string, string>,
+    attachData: Record<string, string | undefined>,
     onConnecting?: () => void;
     onOpen?: () => void;
     onClose?: (event: CloseEvent) => void;
@@ -52,7 +52,10 @@ export const createWebSocket = ({
         onConnecting?.();
         let queryParameterString: string = "?";
         for (const key in attachData) {
-            queryParameterString += encodeURI(key) + "=" + encodeURI(attachData[key]) + "&";
+            const value = attachData[key];
+            if (value) {
+                queryParameterString += encodeURI(key) + "=" + encodeURI(value) + "&";
+            }
         }
         queryParameterString = queryParameterString.substring(0, queryParameterString.length - 1);
 

@@ -94,6 +94,8 @@ export default function App() {
                 setPairKey(data.pairKey);
                 setPage("pairPage");
                 updateStatus("ready", "Share your code to pair a device");
+            } else if (type === "PAIR_STARTED") {
+                showAlert("Pairing verification code", `Your verification code is: ${data.passcode}`);
             } else if (type === "PAIR_FAIL") {
                 const { error } = data;
                 showAlert("Error", "failed to pair device, " + error);
@@ -152,13 +154,16 @@ export default function App() {
             console.log(next, text);
         };
 
-        const createPairWs = () => {
+        const createPairWs = (targetPairKey?: string, passcode?: string) => {
             roomWebSocket?.dispose();
             roomWebSocket = undefined;
             pairWebSocket?.dispose();
             pairWebSocket = createWebSocket({
                 type: "pair",
-                attachData: {},
+                attachData: {
+                    targetPairKey,
+                    passcode,
+                },
                 onMessage: (type, data) => void handleSignal(type, data),
             });
         };
@@ -277,8 +282,7 @@ export default function App() {
                 return;
             }
             const passcode = String(Math.floor(100000 + Math.random() * 900000));
-            sendPairSignal("PAIR", { targetPairKey: targetKey.trim(), passcode });
-            showAlert("Pairing verification code", `Your verification code is: ${passcode}`);
+            createPairWs(targetKey.trim(), passcode);
             updateStatus("waiting", "Requesting a secure pairing");
         }
 
