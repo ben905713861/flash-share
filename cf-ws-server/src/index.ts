@@ -38,41 +38,25 @@ function http(status: number, body: string) {
 /** One independently-addressable DO per pairKey. */
 export class PairingRoom extends DurableObject<Env> {
 	private readonly state: DurableObjectState;
-	private readonly environment: Env;
 
 	constructor(state: DurableObjectState, env: Env) {
 		super(state, env); this.state = state;
-		this.environment = env;
 	}
 
+	// register
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return http(426, "Expected WebSocket");
 		}
 		return this.state.blockConcurrencyWhile(async () => {
-			const isPaired = await this.state.storage.get<boolean>("isPaired");
-			if (isPaired) {
+			const ws = this.state.getWebSockets()
+				.find(it => it.readyState === WebSocket.OPEN);
+			if (ws) {
 				return http(409, "pairKey is already paired");
 			}
 			const pair = new WebSocketPair();
 			const [client, server] = Object.values(pair);
-
-			const anotherWs = this.state.getWebSockets()
-				.find(it => it.readyState === WebSocket.OPEN);
-			if (anotherWs) {
-				// DO contains another ws, return error and exit
-				return http(409, "pairKey is already registered");
-			}
 			this.state.acceptWebSocket(server);
-
-			const pairKey = new URL(request.url).searchParams.get("pairKey")!;
-			await this.state.storage.put("pairKey", pairKey);
-
-			sendMsg(server, "PENDING_PAIR_SUCC", { pairKey });
-			const targetPairKey = new URL(request.url).searchParams.get("targetPairKey");
-			if (targetPairKey) {
-				await this.pair(server, targetPairKey);
-			}
 			return new Response(null, { status: 101, webSocket: client });
 		});
 	}
@@ -83,36 +67,40 @@ export class PairingRoom extends DurableObject<Env> {
 		return wsList.length > 0;
 	}
 
-	async getPairKey(): Promise<string> {
-		const pairKey = await this.state.storage.get<string>("pairKey");
-		if (!pairKey) {
-			throw new Error("pairKey didn't bind to DO");
+	async prePair(targetPairKey: string, passcode: string) {
+		const wsList = this.state.getWebSockets()
+			.filter(it => it.readyState === WebSocket.OPEN);
+		if (wsList.length === 0) {
+			return http(409, "pairKey is not registered");
 		}
-		return pairKey;
+		if (wsList.length > 1) {
+			return http(409, "pairKey is paired");
+		}
+		const ownerWs = wsList[0];
+
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+		this.state.acceptWebSocket(server);
+
+		sendMsg(ownerWs, "WAITING_PAIR_CONFIRM", { passcode });
+		sendMsg(server, "PAIR_STARTED", { passcode })
+
+		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	async notifyPrePaired(requesterPairKey: string, passcode: string): Promise<string | null> {
-		return this.state.blockConcurrencyWhile(async () => {
-			const isPaired = await this.state.storage.get<boolean>("isPaired") ?? false;
-			if (isPaired) {
-				return "pairKey is not registered";
-			}
-			const storageRequesterPairKey = await this.state.storage.get<string>("requesterPairKey");
-			if (storageRequesterPairKey) {
-				return "another device has sent pair request";
-			}
-			const ws: WebSocket[] = this.state.getWebSockets();
-			if (ws.length === 0) {
-				return "pairKey is not registered";
-			}
-			const thisWs = ws.find(it => it.readyState === WebSocket.OPEN);
-			if (!thisWs) {
-				return "target ws is not opened.";
-			}
-			await this.state.storage.put("requesterPairKey", requesterPairKey);
-			sendMsg(thisWs, "WAITING_PAIR_CONFIRM", { passcode });
-			return null;
-		});
+	async pair() {
+		const wsList = this.state.getWebSockets()
+			.filter(it => it.readyState === WebSocket.OPEN);
+		if (wsList.length < 2) {
+			wsList.forEach(ws => {
+				sendMsg(ws, "PAIR_FAIL", { error: "connection has been disconnected, unable to pair" });
+			});
+			return;
+		}
+		const [ selfWs, requesterWs ] = wsList;
+		const roomKey = randomUUID();
+		sendMsg(selfWs, "PAIR_SUCC", { roomKey });
+		sendMsg(requesterWs, "PAIR_SUCC", { roomKey });
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
@@ -141,73 +129,15 @@ export class PairingRoom extends DurableObject<Env> {
 		}
 		console.log("received type:", type);
 		if (type === 'PAIR_CONFIRM') {
-			const pending = await this.state.storage.get<{roomKey:string; requesterPairKey:string}>("pending");
-			if (!pending) { sendMsg(ws, "ERROR", {error:"no pending pair confirmation"}); return; }
-			const requester = this.environment.PAIRING.getByName(pending.requesterPairKey);
-			const notified = await requester.notifyConfirmed(pending.roomKey);
-			if (!notified) {
-				sendMsg(ws, "PAIR_FAIL", { error: "requesting device is no longer connected" });
-				await this.state.storage.delete("pending");
-				return;
-			}
-			await this.state.storage.put("isPaired", true);
-			await this.state.storage.delete("pending");
+			await this.pair();
 			return;
 		}
 		if (type === 'PAIR_REJECT') {
-			const pending = await this.state.storage.get<{roomKey:string; requesterPairKey:string}>("pending");
-			if (!pending) { sendMsg(ws, "ERROR", {error:"no pending pair confirmation"}); return; }
-			const requester = this.environment.PAIRING.getByName(pending.requesterPairKey);
-			await requester.notifyRejected();
-			await this.state.storage.delete("pending");
-		}
-	}
-
-	async pair(ws: WebSocket, targetPairKey?: string, passcode = String(Math.floor(100000 + Math.random() * 900000))) {
-		if (!targetPairKey) {
-			sendMsg(ws, 'PAIR_FAIL', { error: 'targetPairKey is missing' });
-			return;
-		}
-		if (!passcode) {
-			sendMsg(ws, 'PAIR_FAIL', {error:'passcode is missing'});
-			return;
-		}
-		const thisDOPairKey = await this.getPairKey();
-		if (thisDOPairKey === targetPairKey) {
-			sendMsg(ws, 'PAIR_FAIL', { error: "unable to pair with same ws。" });
-			return;
-		}
-		// prePair
-		try {
-			const targetStub = this.environment.PAIRING.getByName(targetPairKey);
-			const prePareResult = await targetStub.notifyPrePaired(thisDOPairKey, passcode);
-			if (prePareResult) {
-				sendMsg(ws, 'PAIR_FAIL', { error: prePareResult });
-				return;
+			const requesterWs = this.state.getWebSockets()
+				.find(peer => peer !== ws);
+			if (requesterWs) {
+				sendMsg(requesterWs, "PAIR_REJECT");
 			}
-			sendMsg(ws, 'PAIR_STARTED', { passcode });
-			// requester is notified after confirmation
-		} catch (e) {
-			if (e instanceof Error) {
-				console.error('register pairKey failed', e);
-				sendMsg(ws, 'PAIR_FAIL', { error: e.message });
-			}
-		}
-	}
-
-	async notifyConfirmed(roomKey: string): Promise<boolean> {
-		const ws = this.state.getWebSockets()
-			.find(it => it.readyState === WebSocket.OPEN);
-		if (!ws) return false;
-		sendMsg(ws, "PAIR_SUCC", {roomKey});
-		return true;
-	}
-
-	async notifyRejected() {
-		const ws = this.state.getWebSockets()
-			.find(it => it.readyState === WebSocket.OPEN);
-		if (ws) {
-			sendMsg(ws, "PAIR_REJECT");
 		}
 	}
 
@@ -215,7 +145,6 @@ export class PairingRoom extends DurableObject<Env> {
 		await this.state.storage.delete("isPaired");
 		await this.state.storage.delete("pending");
 	}
-
 }
 
 /** One independently-addressable DO per roomKey, limited to two peers. */
@@ -282,15 +211,24 @@ export class ChatRoom extends DurableObject<Env> {
 }
 
 async function pendingPair(request: Request, env: Env) {
+	const requestUrl = new URL(request.url);
+	const targetPairKey = requestUrl.searchParams.get("targetPairKey");
+	// pair workflow
+	if (targetPairKey) {
+		const passcode =  requestUrl.searchParams.get("passcode");
+		if (!passcode) {
+			return http(400, "passcode is missing");
+		}
+		return env.PAIRING.getByName(targetPairKey).prePair(targetPairKey, passcode);
+	}
+	// register pair workflow
 	let pairKey: string;
 	while (true) {
 		pairKey = randomUUID();
 		const pairService = env.PAIRING.getByName(pairKey);
 		const registerResult = await pairService.checkPairKeyExist();
 		if (!registerResult) {
-			const pairUrl = new URL(request.url);
-			pairUrl.searchParams.set("pairKey", pairKey);
-			return pairService.fetch(new Request(pairUrl, request));
+			return pairService.fetch(request);
 		}
 	}
 }
