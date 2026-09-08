@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { verifyRoomKey } from "./room-key";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 const MESSAGE_RATE_WINDOW_MS = 10_000;
@@ -28,6 +29,15 @@ export class ChatRoom extends DurableObject<Env> {
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return new Response("Expected WebSocket", { status: 426 });
+		}
+		const roomKey = new URL(request.url).searchParams.get("roomKey");
+		if (!roomKey) {
+			return new Response("roomKey is empty", { status: 400 });
+		}
+		try {
+			verifyRoomKey(roomKey, this.env.ROOM_KEY_SECRET);
+		} catch {
+			return new Response("Invalid or expired roomKey", { status: 401 });
 		}
 
 		return this.state.blockConcurrencyWhile(async () => {

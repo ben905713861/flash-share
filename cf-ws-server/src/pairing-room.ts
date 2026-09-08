@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import {randomUUID} from "crypto";
+import { createRoomKey } from "./room-key";
 
 type PairAttachment = {
 	role: "owner" | "requester";
@@ -148,7 +148,7 @@ export class PairingRoom extends DurableObject<Env> {
 			sendMsg(ownerWs, "PAIR_FAIL", { error: "connection has been disconnected, unable to pair" });
 			return;
 		}
-		const roomKey = randomUUID();
+		const roomKey = createRoomKey(this.env.ROOM_KEY_SECRET);
 		ownerWs.serializeAttachment({ role: "owner", status: "paired", roomKey } satisfies PairAttachment);
 		requesterWs.serializeAttachment({ role: "requester", status: "paired", roomKey } satisfies PairAttachment);
 		sendMsg(ownerWs, "PAIR_SUCC", { roomKey });

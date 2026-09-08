@@ -1,4 +1,8 @@
 import {randomUUID} from "crypto";
+import { ChatRoom } from "./chat-room";
+import { PairingRoom } from "./pairing-room";
+
+export { ChatRoom, PairingRoom };
 
 async function pendingPair(request: Request, env: Env) {
 	const requestUrl = new URL(request.url);
@@ -9,13 +13,13 @@ async function pendingPair(request: Request, env: Env) {
 		if (!passcode) {
 			return new Response("passcode is missing", { status: 400 });
 		}
-		return env.PAIRING.getByName(targetPairKey).prePair(passcode);
+		return env.PAIR_ROOM.getByName(targetPairKey).fetch(request);
 	}
 	// register pair workflow
 	let pairKey: string;
 	while (true) {
 		pairKey = randomUUID();
-		const pairService = env.PAIRING.getByName(pairKey);
+		const pairService = env.PAIR_ROOM.getByName(pairKey);
 		const registerResult = await pairService.checkPairKeyExist();
 		if (!registerResult) {
 			const registerUrl = new URL(request.url);
