@@ -175,27 +175,29 @@ export class PairingRoom extends DurableObject<Env> {
 	}
 
 	async webSocketClose(ws: WebSocket) {
-		const attachment = this.getPairAttachment(ws);
-		if (attachment?.role === "requester" && attachment.status === "pending") {
-			const ownerWs = this.state.getWebSockets()
-				.filter(peer => peer.readyState === WebSocket.OPEN)
-				.find(peer => {
-					const attachment = this.getPairAttachment(peer);
-					return attachment?.role === "owner" && attachment.status === "pending";
-				});
-			ownerWs?.serializeAttachment({ role: "owner", status: "registered" } satisfies PairAttachment);
-		} else if (attachment?.role === "owner" && attachment.status === "pending") {
-			const requesterWs = this.state.getWebSockets()
-				.filter(peer => peer.readyState === WebSocket.OPEN)
-				.find(peer => {
-					const attachment = this.getPairAttachment(peer);
-					return attachment?.role === "requester" && attachment.status === "pending";
-				});
-			if (requesterWs) {
-				sendMsg(requesterWs, "PAIR_FAIL", { error: "owner disconnected" });
-				requesterWs.close(1000, "owner disconnected");
+		await this.state.blockConcurrencyWhile(async () => {
+			const attachment = this.getPairAttachment(ws);
+			if (attachment?.role === "requester" && attachment.status === "pending") {
+				const ownerWs = this.state.getWebSockets()
+					.filter(peer => peer.readyState === WebSocket.OPEN)
+					.find(peer => {
+						const attachment = this.getPairAttachment(peer);
+						return attachment?.role === "owner" && attachment.status === "pending";
+					});
+				ownerWs?.serializeAttachment({ role: "owner", status: "registered" } satisfies PairAttachment);
+			} else if (attachment?.role === "owner" && attachment.status === "pending") {
+				const requesterWs = this.state.getWebSockets()
+					.filter(peer => peer.readyState === WebSocket.OPEN)
+					.find(peer => {
+						const attachment = this.getPairAttachment(peer);
+						return attachment?.role === "requester" && attachment.status === "pending";
+					});
+				if (requesterWs) {
+					sendMsg(requesterWs, "PAIR_FAIL", { error: "owner disconnected" });
+					requesterWs.close(1000, "owner disconnected");
+				}
 			}
-		}
+		});
 	}
 
 	private getPairAttachment(ws: WebSocket): PairAttachment | null {
