@@ -1,16 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import {randomUUID} from "crypto";
 
-const MAX_PAYLOAD_BYTES = 256 * 1024;
-const RATE_WINDOW_MS = 10_000;
-const MAX_MESSAGES = 60;
-
-type Message = { type?: string; data?: Record<string, unknown>; roomKey?: string };
-
-const textOf = (message: string | ArrayBuffer) => {
-	return typeof message === "string" ? message : new TextDecoder().decode(message);
-}
-
+type PairAttachment = {
+	role: "owner" | "requester";
+	status: "registered" | "pending" | "paired";
+	roomKey?: string;
+};
 
 function sendMsg(ws: WebSocket, type: string, data?: unknown) {
 	if (ws.readyState === WebSocket.OPEN) {
@@ -18,24 +13,10 @@ function sendMsg(ws: WebSocket, type: string, data?: unknown) {
 	}
 }
 
-function parse(message: string | ArrayBuffer): Message | null {
-	const text = textOf(message);
-	if (text.length > MAX_PAYLOAD_BYTES) {
-		return null;
-	}
-	try {
-		const value: unknown = JSON.parse(text);
-		return value && typeof value === "object" && !Array.isArray(value) ? value as Message : null;
-	} catch {
-		return null;
-	}
-}
-
 function http(status: number, body: string) {
 	return new Response(body, { status });
 }
 
-/** One independently-addressable DO per pairKey. */
 export class PairingRoom extends DurableObject<Env> {
 	private readonly state: DurableObjectState;
 
@@ -57,6 +38,10 @@ export class PairingRoom extends DurableObject<Env> {
 			const pair = new WebSocketPair();
 			const [client, server] = Object.values(pair);
 			this.state.acceptWebSocket(server);
+			server.serializeAttachment({
+				role: "owner",
+				status: "registered"
+			} satisfies PairAttachment);
 			return new Response(null, { status: 101, webSocket: client });
 		});
 	}
@@ -67,49 +52,43 @@ export class PairingRoom extends DurableObject<Env> {
 		return wsList.length > 0;
 	}
 
-	async prePair(targetPairKey: string, passcode: string) {
-		const wsList = this.state.getWebSockets()
-			.filter(it => it.readyState === WebSocket.OPEN);
-		if (wsList.length === 0) {
-			return http(409, "pairKey is not registered");
-		}
-		if (wsList.length > 1) {
-			return http(409, "pairKey is paired");
-		}
-		const ownerWs = wsList[0];
+	async prePair(passcode: string) {
+		return this.state.blockConcurrencyWhile(async () => {
+			const wsList = this.state.getWebSockets()
+				.filter(it => it.readyState === WebSocket.OPEN);
+			if (wsList.length === 0) {
+				return http(409, "pairKey is not registered");
+			}
+			if (wsList.length > 1) {
+				return http(409, "pairKey is paired");
+			}
+			const ownerWs = wsList[0];
+			const ownerAttachment = this.getPairAttachment(ownerWs);
+			if (ownerAttachment?.role !== "owner" || ownerAttachment?.status !== "registered") {
+				return http(409, "pairKey is already pending");
+			}
 
-		const pair = new WebSocketPair();
-		const [client, server] = Object.values(pair);
-		this.state.acceptWebSocket(server);
+			const pair = new WebSocketPair();
+			const [client, server] = Object.values(pair);
+			this.state.acceptWebSocket(server);
+			ownerWs.serializeAttachment({ role: "owner", status: "pending" } satisfies PairAttachment);
+			server.serializeAttachment({ role: "requester", status: "pending" } satisfies PairAttachment);
 
-		sendMsg(ownerWs, "WAITING_PAIR_CONFIRM", { passcode });
-		sendMsg(server, "PAIR_STARTED", { passcode })
+			sendMsg(ownerWs, "WAITING_PAIR_CONFIRM", { passcode });
+			sendMsg(server, "PAIR_STARTED", { passcode });
 
-		return new Response(null, { status: 101, webSocket: client });
-	}
-
-	async pair() {
-		const wsList = this.state.getWebSockets()
-			.filter(it => it.readyState === WebSocket.OPEN);
-		if (wsList.length < 2) {
-			wsList.forEach(ws => {
-				sendMsg(ws, "PAIR_FAIL", { error: "connection has been disconnected, unable to pair" });
-			});
-			return;
-		}
-		const [ selfWs, requesterWs ] = wsList;
-		const roomKey = randomUUID();
-		sendMsg(selfWs, "PAIR_SUCC", { roomKey });
-		sendMsg(requesterWs, "PAIR_SUCC", { roomKey });
+			return new Response(null, { status: 101, webSocket: client });
+		});
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
 		let reqBody;
+		const messageString = typeof message === "string" ? message : new TextDecoder().decode(message);
 		try {
-			reqBody = JSON.parse(textOf(message));
+			reqBody = JSON.parse(messageString);
 		} catch (e) {
 			if (e instanceof Error) {
-				console.error('invalid request body', textOf(message), e);
+				console.error('invalid request body', messageString, e);
 				sendMsg(ws, 'ERROR', { error: 'invalid request body' });
 			}
 			return;
@@ -128,86 +107,121 @@ export class PairingRoom extends DurableObject<Env> {
 			return;
 		}
 		console.log("received type:", type);
-		if (type === 'PAIR_CONFIRM') {
-			await this.pair();
+
+		await this.state.blockConcurrencyWhile(async () => {
+			if (type === 'PAIR_CONFIRM') {
+				await this.pair(ws);
+			} else if (type === 'PAIR_REJECT') {
+				this.pairReject(ws);
+			}
+		});
+	}
+
+	private async pair(ownerWs: WebSocket) {
+		const ownerAtt = this.getPairAttachment(ownerWs);
+		if (ownerAtt === null || ownerAtt.role !== "owner" || ownerAtt.status !== "pending") {
+			sendMsg(ownerWs, "PAIR_FAIL", { error: "only owner can confirm pairing" });
 			return;
 		}
-		if (type === 'PAIR_REJECT') {
-			const requesterWs = this.state.getWebSockets()
-				.find(peer => peer !== ws);
-			if (requesterWs) {
-				sendMsg(requesterWs, "PAIR_REJECT");
-			}
+		const requesterWs = this.state.getWebSockets()
+			.filter(it => it.readyState === WebSocket.OPEN)
+			.find(it => {
+				const attachment = this.getPairAttachment(it);
+				return attachment?.role === "requester" && attachment?.status === "pending";
+			});
+		if (!requesterWs) {
+			ownerWs.serializeAttachment({ role: "owner", status: "registered" } satisfies PairAttachment);
+			sendMsg(ownerWs, "PAIR_FAIL", { error: "connection has been disconnected, unable to pair" });
+			return;
 		}
+		const roomKey = randomUUID();
+		ownerWs.serializeAttachment({ role: "owner", status: "paired", roomKey } satisfies PairAttachment);
+		requesterWs.serializeAttachment({ role: "requester", status: "paired", roomKey } satisfies PairAttachment);
+		sendMsg(ownerWs, "PAIR_SUCC", { roomKey });
+		sendMsg(requesterWs, "PAIR_SUCC", { roomKey });
+	}
+
+	private pairReject(ws: WebSocket) {
+		const ownerAttr = this.getPairAttachment(ws);
+		if (ownerAttr === null || ownerAttr.role !== "owner" || ownerAttr.status !== "pending") {
+			sendMsg(ws, "ERROR", {error: "only pending owner can reject pairing"});
+			return;
+		}
+		const requesterWs = this.state.getWebSockets()
+			.filter(peer => peer.readyState === WebSocket.OPEN)
+			.find(peer => {
+				const attachment = this.getPairAttachment(peer);
+				return attachment?.role === "requester" && attachment.status === "pending";
+			});
+		if (requesterWs) {
+			sendMsg(requesterWs, "PAIR_REJECT");
+			requesterWs.close(1000, "pairing rejected");
+		}
+		ws.serializeAttachment({role: "owner", status: "registered"} satisfies PairAttachment);
 	}
 
 	async webSocketClose(ws: WebSocket) {
-		await this.state.storage.delete("isPaired");
-		await this.state.storage.delete("pending");
+		const attachment = this.getPairAttachment(ws);
+		if (attachment?.role === "requester" && attachment.status === "pending") {
+			const ownerWs = this.state.getWebSockets()
+				.filter(peer => peer.readyState === WebSocket.OPEN)
+				.find(peer => {
+					const attachment = this.getPairAttachment(peer);
+					return attachment?.role === "owner" && attachment.status === "pending";
+				});
+			ownerWs?.serializeAttachment({ role: "owner", status: "registered" } satisfies PairAttachment);
+		}
+	}
+
+	private getPairAttachment(ws: WebSocket): PairAttachment | null {
+		return ws.deserializeAttachment() as PairAttachment | null;
 	}
 }
 
-/** One independently-addressable DO per roomKey, limited to two peers. */
 export class ChatRoom extends DurableObject<Env> {
 	private readonly state: DurableObjectState;
 	constructor(state: DurableObjectState, env: Env) { super(state, env); this.state = state; }
-	private readonly rates = new WeakMap<WebSocket, { startedAt: number; count: number }>();
 
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return http(426, "Expected WebSocket");
 		}
-		const existing = this.state.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN);
-		if (existing.length >= 2) {
+		const wsList = this.state.getWebSockets()
+			.filter(ws => ws.readyState === WebSocket.OPEN);
+		if (wsList.length >= 2) {
 			return http(1013, "room is full");
 		}
+
 		const pair = new WebSocketPair();
-		this.state.acceptWebSocket(pair[1]);
-		const sockets = [...existing, pair[1]];
-		this.joinRoom(pair[1], sockets);
-		return new Response(null, { status: 101, webSocket: pair[0] });
+		const [client, server] = Object.values(pair);
+		this.state.acceptWebSocket(server);
+
+		this.joinRoom();
+		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		const now = Date.now(); const rate = this.rates.get(ws);
-		if (!rate || now - rate.startedAt >= RATE_WINDOW_MS) {
-			this.rates.set(ws, { startedAt: now, count: 1 });
-		} else if (++rate.count > MAX_MESSAGES) {
-			ws.close(1008, "Too many messages");
-			return;
-		}
-		const text = textOf(message);
-		if (text.length > MAX_PAYLOAD_BYTES) {
-			ws.close(1009, "Message too big");
-			return;
-		}
-		this.handleMessage(ws, text); return;
-	}
-
-	private handleMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		const body = parse(message);
-		if (!body?.type) {
-			sendMsg(ws, "ERROR", { error: "invalid request body" });
-			return;
-		}
-		if (body.type === "JOIN_ROOM") {
-			return;
-		}
-		for (const peer of this.state.getWebSockets()) {
-			if (peer !== ws && peer.readyState === WebSocket.OPEN) {
-				peer.send(textOf(message));
-			}
-		}
-	}
-	private joinRoom(ws: WebSocket, sockets: WebSocket[]) {
-		if (sockets.length === 1) {
-			sendMsg(ws, "JOIN_ROOM_WAIT");
+	private joinRoom() {
+		const wsList = this.state.getWebSockets()
+			.filter(ws => ws.readyState === WebSocket.OPEN);
+		if (wsList.length === 1) {
+			sendMsg(wsList[0], "JOIN_ROOM_WAIT");
 		} else {
-			sockets.forEach((item, index) => {
+			wsList.forEach((item, index) => {
 				sendMsg(item, "JOIN_ROOM_SUCC", {isOfferer: index === 0})
 			});
 		}
 	}
+
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+		// forward
+		const targetWsList = this.state.getWebSockets()
+			.filter(peer => peer.readyState === WebSocket.OPEN)
+			.filter(peer => peer !== ws);
+		targetWsList.forEach((targetWs) => {
+			targetWs.send(message);
+		})
+	}
+
 }
 
 async function pendingPair(request: Request, env: Env) {
@@ -219,7 +233,7 @@ async function pendingPair(request: Request, env: Env) {
 		if (!passcode) {
 			return http(400, "passcode is missing");
 		}
-		return env.PAIRING.getByName(targetPairKey).prePair(targetPairKey, passcode);
+		return env.PAIRING.getByName(targetPairKey).prePair(passcode);
 	}
 	// register pair workflow
 	let pairKey: string;
