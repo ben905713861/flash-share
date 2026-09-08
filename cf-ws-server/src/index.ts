@@ -18,7 +18,9 @@ async function pendingPair(request: Request, env: Env) {
 		const pairService = env.PAIRING.getByName(pairKey);
 		const registerResult = await pairService.checkPairKeyExist();
 		if (!registerResult) {
-			return pairService.fetch(request);
+			const registerUrl = new URL(request.url);
+			registerUrl.searchParams.set("pairKey", pairKey);
+			return pairService.fetch(new Request(registerUrl, request));
 		}
 	}
 }

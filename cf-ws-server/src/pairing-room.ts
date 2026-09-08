@@ -20,16 +20,30 @@ export class PairingRoom extends DurableObject<Env> {
 		super(state, env); this.state = state;
 	}
 
-	// register
 	async fetch(request: Request): Promise<Response> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-			new Response("Expected WebSocket", { status: 426 })
+			return new Response("Expected WebSocket", { status: 426 });
+		}
+		const requestUrl = new URL(request.url);
+		if (requestUrl.searchParams.has("targetPairKey")) {
+			// pair
+			const passcode = requestUrl.searchParams.get("passcode")!;
+			return this.prePair(passcode);
+		}
+		// register
+		return this.registerPair(requestUrl);
+	}
+
+	private registerPair(requestUrl: URL) {
+		const pairKey = requestUrl.searchParams.get("pairKey");
+		if (!pairKey) {
+			return new Response("pairKey is null", {status: 409})
 		}
 		return this.state.blockConcurrencyWhile(async () => {
 			const ws = this.state.getWebSockets()
 				.find(it => it.readyState === WebSocket.OPEN);
 			if (ws) {
-				return new Response("pairKey is already paired", { status: 409 })
+				return new Response("pairKey is already paired", {status: 409})
 			}
 			const pair = new WebSocketPair();
 			const [client, server] = Object.values(pair);
@@ -38,7 +52,8 @@ export class PairingRoom extends DurableObject<Env> {
 				role: "owner",
 				status: "registered"
 			} satisfies PairAttachment);
-			return new Response(null, { status: 101, webSocket: client });
+			sendMsg(server, "PENDING_PAIR_SUCC", { pairKey });
+			return new Response(null, {status: 101, webSocket: client});
 		});
 	}
 
@@ -48,7 +63,7 @@ export class PairingRoom extends DurableObject<Env> {
 		return wsList.length > 0;
 	}
 
-	async prePair(passcode: string) {
+	private async prePair(passcode: string) {
 		return this.state.blockConcurrencyWhile(async () => {
 			const wsList = this.state.getWebSockets()
 				.filter(it => it.readyState === WebSocket.OPEN);
@@ -78,7 +93,7 @@ export class PairingRoom extends DurableObject<Env> {
 	}
 
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		let reqBody;
+		let reqBody: unknown;
 		const messageString = typeof message === "string" ? message : new TextDecoder().decode(message);
 		try {
 			reqBody = JSON.parse(messageString);
@@ -89,16 +104,17 @@ export class PairingRoom extends DurableObject<Env> {
 			}
 			return;
 		}
-		if (reqBody == null || reqBody instanceof Array) {
+		if (reqBody == null || typeof reqBody !== "object" || Array.isArray(reqBody)) {
 			sendMsg(ws, "ERROR", { error: "invalid request body" });
 			return;
 		}
-		const { type, data } = reqBody;
-		if (!type) {
+		const body = reqBody as Record<string, unknown>;
+		const { type, data } = body;
+		if (typeof type !== "string" || type.length === 0) {
 			sendMsg(ws, "ERROR", { error: "Unsupported message on pair connection" });
 			return;
 		}
-		if (!data) {
+		if (!Object.prototype.hasOwnProperty.call(body, "data") || data == null) {
 			sendMsg(ws, "ERROR", { error: "data cannot be null" });
 			return;
 		}
@@ -109,6 +125,8 @@ export class PairingRoom extends DurableObject<Env> {
 				await this.pair(ws);
 			} else if (type === 'PAIR_REJECT') {
 				this.pairReject(ws);
+			} else {
+				sendMsg(ws, "ERROR", { error: "unsupported message type" });
 			}
 		});
 	}
@@ -166,6 +184,17 @@ export class PairingRoom extends DurableObject<Env> {
 					return attachment?.role === "owner" && attachment.status === "pending";
 				});
 			ownerWs?.serializeAttachment({ role: "owner", status: "registered" } satisfies PairAttachment);
+		} else if (attachment?.role === "owner" && attachment.status === "pending") {
+			const requesterWs = this.state.getWebSockets()
+				.filter(peer => peer.readyState === WebSocket.OPEN)
+				.find(peer => {
+					const attachment = this.getPairAttachment(peer);
+					return attachment?.role === "requester" && attachment.status === "pending";
+				});
+			if (requesterWs) {
+				sendMsg(requesterWs, "PAIR_FAIL", { error: "owner disconnected" });
+				requesterWs.close(1000, "owner disconnected");
+			}
 		}
 	}
 
