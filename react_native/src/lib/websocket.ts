@@ -9,7 +9,7 @@ type WebSocketOptions = {
     attachData: Record<string, string | undefined>,
     onConnecting?: () => void;
     onOpen?: () => void;
-    onClose?: (event: CloseEvent) => void;
+    onClose?: (event: CloseEvent) => boolean;
     onMessage: (type: string, data: any) => void;
 };
 

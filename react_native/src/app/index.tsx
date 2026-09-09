@@ -89,6 +89,13 @@ export default function App() {
         let pairWebSocket: ReturnType<typeof createWebSocket> | undefined;
         let roomWebSocket: ReturnType<typeof createWebSocket> | undefined;
 
+        const handleSignalError = (error: unknown) => {
+            console.error("Failed to handle signaling message", error);
+            const message = error instanceof Error ? error.message : "Unable to process signaling message";
+            showAlert("Connection error", message);
+            updateStatus("error", message);
+        };
+
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
                 setPairKey(data.pairKey);
@@ -99,8 +106,11 @@ export default function App() {
             } else if (type === "PAIR_FAIL") {
                 const { error } = data;
                 showAlert("Error", "failed to pair device, " + error);
-            }
-            else if (type === "WAITING_PAIR_CONFIRM") {
+            } else if (type === "ERROR") {
+                const message = typeof data?.error === "string" ? data.error : "Signaling request failed";
+                showAlert("Error", message);
+                updateStatus("error", message);
+            } else if (type === "WAITING_PAIR_CONFIRM") {
                 const passcode = String(data?.passcode ?? "");
                 showConfirm(
                     "Pairing request",
@@ -164,7 +174,9 @@ export default function App() {
                     targetPairKey,
                     passcode,
                 },
-                onMessage: (type, data) => void handleSignal(type, data),
+                onMessage: (type, data) => {
+                    void handleSignal(type, data).catch(handleSignalError);
+                },
             });
         };
 
@@ -183,11 +195,14 @@ export default function App() {
                     }
                     return false;
                 },
-                onMessage: (type, data) => void handleSignal(type, data),
+                onMessage: (type, data) => {
+                    void handleSignal(type, data).catch(handleSignalError);
+                },
             });
         };
 
         const clearConnHistory = () => {
+            webRTC.dispose();
             setTargetPairKey("");
             storage.remove("roomKey");
             setPage("pairPage");
