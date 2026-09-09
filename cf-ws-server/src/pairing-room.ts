@@ -37,13 +37,13 @@ export class PairingRoom extends DurableObject<Env> {
 	private registerPair(requestUrl: URL) {
 		const pairKey = requestUrl.searchParams.get("pairKey");
 		if (!pairKey) {
-			return new Response("pairKey is null", {status: 409})
+			return this.wsReturnError("pairKey is null");
 		}
 		return this.state.blockConcurrencyWhile(async () => {
 			const ws = this.state.getWebSockets()
 				.find(it => it.readyState === WebSocket.OPEN);
 			if (ws) {
-				return new Response("pairKey is already paired", {status: 409})
+				return this.wsReturnError("pairKey is already paired");
 			}
 			const pair = new WebSocketPair();
 			const [client, server] = Object.values(pair);
@@ -68,15 +68,15 @@ export class PairingRoom extends DurableObject<Env> {
 			const wsList = this.state.getWebSockets()
 				.filter(it => it.readyState === WebSocket.OPEN);
 			if (wsList.length === 0) {
-				return new Response("pairKey is not registered", { status: 409 })
+				return this.wsReturnError("pairKey is not registered");
 			}
 			if (wsList.length > 1) {
-				return new Response("pairKey is paired", { status: 409 })
+				return this.wsReturnError("pairKey is paired");
 			}
 			const ownerWs = wsList[0];
 			const ownerAttachment = this.getPairAttachment(ownerWs);
 			if (ownerAttachment?.role !== "owner" || ownerAttachment?.status !== "registered") {
-				return new Response("pairKey is already pending", { status: 409 })
+				return this.wsReturnError("pairKey is already pending");
 			}
 
 			const pair = new WebSocketPair();
@@ -202,5 +202,12 @@ export class PairingRoom extends DurableObject<Env> {
 
 	private getPairAttachment(ws: WebSocket): PairAttachment | null {
 		return ws.deserializeAttachment() as PairAttachment | null;
+	}
+
+	private wsReturnError(error: string) {
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+		server.close(1008, error);
+		return new Response(null, {status: 101, webSocket: client});
 	}
 }

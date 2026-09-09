@@ -174,6 +174,13 @@ export default function App() {
                     targetPairKey,
                     passcode,
                 },
+                onClose: (event) => {
+                    if (event.code === 1008) {
+                        showAlert("Error", event.reason);
+                        return true;
+                    }
+                    return false;
+                },
                 onMessage: (type, data) => {
                     void handleSignal(type, data).catch(handleSignalError);
                 },

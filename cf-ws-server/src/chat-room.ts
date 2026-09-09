@@ -32,7 +32,7 @@ export class ChatRoom extends DurableObject<Env> {
 		}
 		const roomKey = new URL(request.url).searchParams.get("roomKey");
 		if (!roomKey) {
-			return new Response("roomKey is empty", { status: 400 });
+			return this.wsReturnError("roomKey is empty");
 		}
 		try {
 			verifyRoomKey(roomKey, this.env.ROOM_KEY_SECRET);
@@ -44,7 +44,7 @@ export class ChatRoom extends DurableObject<Env> {
 			const wsList = this.state.getWebSockets()
 				.filter(ws => ws.readyState === WebSocket.OPEN);
 			if (wsList.length >= 2) {
-				return new Response("room is full", { status: 409 });
+				return this.wsReturnError("room is full");
 			}
 
 			const pair = new WebSocketPair();
@@ -105,6 +105,13 @@ export class ChatRoom extends DurableObject<Env> {
 
 	private getAttachment(ws: WebSocket): ChatAttachment | null {
 		return ws.deserializeAttachment() as ChatAttachment | null;
+	}
+
+	private wsReturnError(error: string) {
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+		server.close(1008, error);
+		return new Response(null, {status: 101, webSocket: client});
 	}
 
 }
