@@ -77,12 +77,12 @@ export const createWebSocket = ({
         };
         socket.onerror = () => socket.close();
         socket.onclose = (event: CloseEvent) => {
+            if (ws === socket) {
+                ws = null;
+            }
             const skip = onClose?.(event) ?? false;
             if (skip) {
                 return;
-            }
-            if (ws === socket) {
-                ws = null;
             }
             scheduleReconnect();
         };
