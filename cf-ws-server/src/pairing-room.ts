@@ -207,6 +207,7 @@ export class PairingRoom extends DurableObject<Env> {
 	private wsReturnError(error: string) {
 		const pair = new WebSocketPair();
 		const [client, server] = Object.values(pair);
+		this.state.acceptWebSocket(server)
 		server.close(1008, error);
 		return new Response(null, {status: 101, webSocket: client});
 	}

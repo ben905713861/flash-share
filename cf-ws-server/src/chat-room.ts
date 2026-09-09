@@ -37,7 +37,7 @@ export class ChatRoom extends DurableObject<Env> {
 		try {
 			verifyRoomKey(roomKey, this.env.ROOM_KEY_SECRET);
 		} catch {
-			return new Response("Invalid or expired roomKey", { status: 401 });
+			return this.wsReturnError("Invalid or expired roomKey");
 		}
 
 		return this.state.blockConcurrencyWhile(async () => {
@@ -110,6 +110,7 @@ export class ChatRoom extends DurableObject<Env> {
 	private wsReturnError(error: string) {
 		const pair = new WebSocketPair();
 		const [client, server] = Object.values(pair);
+		this.state.acceptWebSocket(server);
 		server.close(1008, error);
 		return new Response(null, {status: 101, webSocket: client});
 	}
