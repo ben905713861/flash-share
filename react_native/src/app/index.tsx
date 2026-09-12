@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Pressable,
@@ -9,35 +9,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { createWebSocket } from "@/lib/websocket";
-import {pickTransferFiles, type TransferFile} from "@/lib/file-transfer";
 import {applyThemePreference, type ThemePreference} from "@/lib/theme";
-import {
-    ConnectionStatus,
-    FileDetail,
-    FileTransferProgress,
-    FileTransferStatus,
-    createWebRTC,
-} from "@/lib/webrtc";
+import {createWebRTC} from "@/lib/webrtc";
 import storage from "@/lib/storage";
 import { PairDevice } from "@/components/pair-device";
-import { TextWorkspace } from "@/components/text-workspace";
-import { FileWorkspace } from "@/components/file-workspace";
+import {TextWorkspace, TextWorkspaceRef} from "@/components/text-workspace";
+import {FileWorkspace, FileWorkspaceRef} from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
 import { C, s } from "@/styles";
 import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
 
-const hasDuplicateFilenames = (files: TransferFile[]) => {
-    const names = new Set<string>();
-    for (const file of files) {
-        if (names.has(file.name)) {
-            return true;
-        }
-        names.add(file.name);
-    }
-    return false;
-};
 
 const THEME_STORAGE_KEY = "flash-share-theme";
 
@@ -66,24 +49,28 @@ export default function App() {
 
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
-    const [userText, userTextComes] = useState("");
+    // const [userText, userTextComes] = useState("");
 
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
-    const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
-    const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
-    const [isSendingFile, setIsSendingFile] = useState(false);
+    // const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
+    // const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
+    // const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
+    // const [isSendingFile, setIsSendingFile] = useState(false);
     const [isSettingsOpen, setSettingsOpen] = useState(false);
-    const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
+    // const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
     // functions: sendText, sendFile, acceptFile, rejectFile, pair
-    const sendTextRef = useRef<(text: string) => void>(() => {});
-    const sendFileRef = useRef<(files: TransferFile[]) => void>(() => {});
-    const acceptFileRef = useRef<() => Promise<void>>(async () => {});
-    const rejectFileRef = useRef<() => void>(() => {});
+    // const sendTextRef = useRef<(text: string) => void>(() => {});
+    // const sendFileRef = useRef<(files: TransferFile[]) => void>(() => {});
+    // const acceptFileRef = useRef<() => Promise<void>>(async () => {});
+    // const rejectFileRef = useRef<() => void>(() => {});
+    const webRTCRef = useRef<ReturnType<typeof createWebRTC>>(null);
+
     const disconnectRef = useRef<() => void>(() => {});
     const exitSignalRef = useRef<() => void>(() => {});
     const pairRef = useRef<(targetKey: string) => void>(() => {});
+    const textWorkspaceRef: React.Ref<TextWorkspaceRef> = useRef(null);
+    const fileWorkspaceRef: React.Ref<FileWorkspaceRef> = useRef(null);
 
     useEffect(() => {
         let pairWebSocket: ReturnType<typeof createWebSocket> | undefined;
@@ -211,48 +198,6 @@ export default function App() {
             console.log("ready", "Ready to pair with another device");
         };
 
-        const fileRequestComes = (fileDetails: FileDetail[]) => {
-            setIncomingFiles(fileDetails);
-            setReceiveDialogOpen(true);
-        };
-
-        const initFileProgress = (fileDetails: FileDetail[]) => {
-            const fileProgressList: FileTransferProgress[] = fileDetails.map(fileDetail => {
-                return {
-                    ...fileDetail,
-                    transferred: -1,
-                    status: "awaiting_approval",
-                };
-            });
-            setFileTransferProgress(fileProgressList);
-        };
-
-        const updateFileTransferProgress = (filename: string, transferred: number, status: FileTransferStatus) => {
-            setFileTransferProgress((fileProgressList) => {
-                return fileProgressList.map(fileProgress => {
-                    if (fileProgress.filename === filename) {
-                        return {
-                            ...fileProgress,
-                            status,
-                            transferred: Math.min(transferred, fileProgress.size),
-                        };
-                    }
-                    return fileProgress;
-                });
-            });
-        };
-
-        const updateFileTransferStatus = (status: FileTransferStatus) => {
-            setFileTransferProgress((fileProgressList) => {
-                return fileProgressList.map(fileProgress => {
-                    if (fileProgress.status === "completed") {
-                        return fileProgress;
-                    }
-                    return { ...fileProgress, status };
-                });
-            });
-        };
-
         const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
             sendSignal: sendRoomSignal,
             onRestartPeerConnection: () => roomWebSocket?.restart(),
@@ -263,17 +208,14 @@ export default function App() {
                 setPeerConnectionState(nextState);
             },
             onHeartbeat: setHeartbeatLatency,
-            userTextComes,
-            fileRequestComes,
-            setIsSendingFile,
-            clearSelectedFiles,
-            initFileProgress,
-            updateFileTransferProgress,
-            updateFileTransferStatus,
+            onDataChannelReceiveText: (value) => { textWorkspaceRef.current?.setUserText(value) },
+            onFileChannelReceiveText: (value) => { fileWorkspaceRef.current?.onFileChannelReceiveText(value) },
+            onFileChannelReceiveBytes: async (bytes) => { fileWorkspaceRef.current?.onFileChannelReceiveBytes(bytes) },
+            onFileChannelClose: () => { fileWorkspaceRef.current?.onFileChannelClose() },
         });
+        webRTCRef.current = webRTC;
 
-        sendTextRef.current = webRTC.sendText;
-        sendFileRef.current = webRTC.sendFile;
+
         exitSignalRef.current = () => sendRoomSignal("EXIT");
         disconnectRef.current = () => {
             webRTC.dispose();
@@ -282,14 +224,7 @@ export default function App() {
             roomWebSocket?.dispose();
             roomWebSocket = undefined;
         };
-        acceptFileRef.current = async () => {
-            setReceiveDialogOpen(false);
-            await webRTC.acceptFile();
-        };
-        rejectFileRef.current = () => {
-            setReceiveDialogOpen(false);
-            webRTC.rejectFile();
-        };
+
 
         pairRef.current = (targetKey) => {
             if (!targetKey.trim()) {
@@ -311,25 +246,6 @@ export default function App() {
         };
     }, [connectionSession]); // empty array: only execute 1 time when load the page
 
-    const onFilesSelected = async () => {
-        if (isSendingFile) {
-            return;
-        }
-        const result = await pickTransferFiles();
-        if (result.canceled) {
-            return;
-        }
-        if (hasDuplicateFilenames(result.result)) {
-            setSelectedFiles([]);
-            showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
-            return;
-        }
-        setSelectedFiles(result.result);
-    };
-
-    const clearSelectedFiles = () => {
-        setSelectedFiles([]);
-    };
 
     const exitShare = () => {
         // Send before closing the socket so the paired device can leave too.
@@ -350,23 +266,16 @@ export default function App() {
     const renderConnectedWorkspace = () => (
         <View style={s.workspace}>
                 <TextWorkspace
-                    value={userText}
+                    ref={textWorkspaceRef}
                     palette={palette}
-                    onChangeText={userTextComes}
-                    onSend={(text) => sendTextRef.current(text)}
+                    textChannelSend={ (value) => { webRTCRef.current?.textChannelSend(value) } }
                 />
             <View style={{ height: 20 }} />
                 <FileWorkspace
-                    selectedFiles={selectedFiles}
-                    isSendingFile={isSendingFile}
-                    fileTransferProgress={fileTransferProgress}
+                    ref={fileWorkspaceRef}
                     palette={palette}
-                    onSelectFiles={() => void onFilesSelected()}
-                    onSendFiles={() => sendFileRef.current(selectedFiles)}
-                    incomingFiles={incomingFiles}
-                    isReceiveDialogOpen={isReceiveDialogOpen}
-                    onAcceptFiles={() => acceptFileRef.current()}
-                    onRejectFiles={() => rejectFileRef.current()}
+                    fileChannelSend={ (value) => webRTCRef.current!.fileChannelSend(value) }
+                    fileChannelSendBytes={ (value) => webRTCRef.current!.fileChannelSendBytes(value) }
                 />
         </View>
     );
