@@ -36,11 +36,9 @@ type RTCDataChannel = ReturnType<RTCPeerConnection["createDataChannel"]>;
 type WebRTCOptions = {
     sendSignal: (type: string, data?: unknown) => void;
     onRestartPeerConnection: () => void;
-    updateStatus: (next: ConnectionStatus, text: string) => void;
     onPeerConnectionState: (state: RTCIceConnectionState) => void;
     onHeartbeat: (latency: number) => void;
-    addActivity: (entry: string) => void;
-    setUserText: (value: string) => void;
+    userTextComes: (value: string) => void;
     fileRequestComes: (fileDetails: FileDetail[]) => void;
     setIsSendingFile: (value: boolean) => void;
     clearSelectedFiles: () => void;
@@ -66,11 +64,9 @@ type FileRequest = {
 export const createWebRTC = ({
     sendSignal,
     onRestartPeerConnection,
-    updateStatus,
     onPeerConnectionState,
     onHeartbeat,
-    addActivity,
-    setUserText,
+    userTextComes,
     fileRequestComes,
     setIsSendingFile,
     clearSelectedFiles,
@@ -217,12 +213,12 @@ export const createWebRTC = ({
         if (!dataChannel) {
             return;
         }
-        dataChannel.onopen = () => addActivity("Message channel connected");
+        dataChannel.onopen = () => console.log("Message channel connected");
         dataChannel.onmessage = (event: any) => {
-            setUserText(event.data);
-            addActivity("Message received from paired device");
+            userTextComes(event.data);
+            console.log("Message received from paired device");
         };
-        dataChannel.onclose = () => addActivity("Message channel closed");
+        dataChannel.onclose = () => console.log("Message channel closed");
     };
 
     const fileChannelInit = () => {
@@ -232,7 +228,7 @@ export const createWebRTC = ({
         const channel = fileChannel;
         channel.bufferedAmountLowThreshold = FILE_BUFFER_LOW_WATER_MARK;
         channel.binaryType = "arraybuffer";
-        channel.onopen = () => addActivity("File channel connected");
+        channel.onopen = () => console.log("File channel connected");
         channel.onmessage = async (event: any) => {
             if (typeof event.data === "string") {
                 let payload: FileRequest;
@@ -258,7 +254,7 @@ export const createWebRTC = ({
                 } else if (type === "file-request-reject") {
                     setIsSendingFile(false);
                     updateFileTransferStatus("declined");
-                    addActivity("File request declined by the other device");
+                    console.log("File request declined by the other device");
                 } else if (type === "file-start") {
                     const { filename, size } = payload;
                     try {
@@ -283,7 +279,7 @@ export const createWebRTC = ({
                     }
                     updateFileTransferProgress(filename, 0, "transferring");
                     try {
-                        addActivity(`Sending ${filename}`);
+                        console.log(`Sending ${filename}`);
                         await sendSingleFile(file);
                         fileChannelSend({ type: "file-end", filename, size: file.size });
                     } catch (e) {
@@ -306,7 +302,7 @@ export const createWebRTC = ({
                             await finalizeReceiveFile(fileHandle!);
                             updateFileTransferProgress(filename, size, "completed");
                             fileChannelSend({ type: "file-end-ack", filename, size });
-                            addActivity(`Received ${filename}`);
+                            console.log(`Received ${filename}`);
                         } else {
                             updateFileTransferProgress(filename, -1, "failed");
                             fileChannelSend({ type: "file-end-reject", filename, size });
@@ -325,7 +321,7 @@ export const createWebRTC = ({
                     if (sendingFiles.length === 0) {
                         setIsSendingFile(false);
                         clearSelectedFiles();
-                        addActivity("File transfer completed");
+                        console.log("File transfer completed");
                     } else {
                         const file = sendingFiles[0];
                         updateFileTransferProgress(file.name, 0, "transferring");
@@ -449,8 +445,8 @@ export const createWebRTC = ({
             onPeerConnectionState(peer.iceConnectionState);
             if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
                 globalThis.clearTimeout(iceDisconnectTimer);
-                updateStatus("connected", "Secure peer-to-peer connection active");
-                addActivity("Devices connected directly");
+                console.log("connected", "Secure peer-to-peer connection active");
+                console.log("Devices connected directly");
             } else if (peer.iceConnectionState === "disconnected") {
                 iceDisconnectTimer = globalThis.setTimeout(() => {
                     if (peer?.iceConnectionState === "disconnected" || peer?.iceConnectionState === "failed") {
@@ -485,7 +481,7 @@ export const createWebRTC = ({
             await peer.setLocalDescription(await peer.createOffer());
             sendSignal("SDP", peer.localDescription);
         } catch {
-            updateStatus("error", "Unable to create a peer connection");
+            console.log("error", "Unable to create a peer connection");
         }
     };
 
@@ -499,7 +495,7 @@ export const createWebRTC = ({
             await peer.setLocalDescription(await peer.createAnswer());
             sendSignal("SDP_ANSWER", peer.localDescription);
         } catch {
-            updateStatus("error", "Unable to establish peer connection");
+            console.log("error", "Unable to establish peer connection");
         }
     };
 
@@ -522,20 +518,20 @@ export const createWebRTC = ({
 
     const sendText = (message: string) => {
         if (dataChannel?.readyState !== "open") {
-            updateStatus("error", "Connect a device before sending a message");
+            console.log("error", "Connect a device before sending a message");
             return;
         }
         if (!message.trim()) {
             return;
         }
         dataChannel.send(message);
-        addActivity("Message sent");
+        console.log("Message sent");
     };
 
     const sendFile = (files: TransferFile[]) => {
         setIsSendingFile(true);
         if (fileChannel?.readyState !== "open") {
-            updateStatus("error", "Connect a device before sending files");
+            console.log("error", "Connect a device before sending files");
             setIsSendingFile(false);
             return;
         }
@@ -552,7 +548,7 @@ export const createWebRTC = ({
             fileDetails,
         });
         initFileProgress(fileDetails);
-        addActivity("Waiting for the other device to approve file transfer");
+        console.log("Waiting for the other device to approve file transfer");
     };
 
     const acceptFile = async () => {

@@ -66,7 +66,7 @@ export default function App() {
 
     const [pairKey, setPairKey] = useState("");
     const [targetPairKey, setTargetPairKey] = useState("");
-    const [userText, setUserText] = useState("");
+    const [userText, userTextComes] = useState("");
 
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
@@ -93,14 +93,14 @@ export default function App() {
             console.error("Failed to handle signaling message", error);
             const message = error instanceof Error ? error.message : "Unable to process signaling message";
             showAlert("Connection error", message);
-            updateStatus("error", message);
+            console.log("error", message);
         };
 
         const handleSignal = async (type: string, data: any) => {
             if (type === "PENDING_PAIR_SUCC") {
                 setPairKey(data.pairKey);
                 setPage("pairPage");
-                updateStatus("ready", "Share your code to pair a device");
+                console.log("ready", "Share your code to pair a device");
             } else if (type === "PAIR_STARTED") {
                 showAlert("Pairing verification code", `Your verification code is: ${data.passcode}`);
             } else if (type === "PAIR_FAIL") {
@@ -109,7 +109,7 @@ export default function App() {
             } else if (type === "ERROR") {
                 const message = typeof data?.error === "string" ? data.error : "Signaling request failed";
                 showAlert("Error", message);
-                updateStatus("error", message);
+                console.log("error", message);
             } else if (type === "WAITING_PAIR_CONFIRM") {
                 const passcode = String(data?.passcode ?? "");
                 showConfirm(
@@ -123,19 +123,19 @@ export default function App() {
                 );
             } else if (type === "PAIR_REJECT") {
                 showAlert("Pairing rejected", "The other device rejected the pairing request.");
-                updateStatus("error", "Pairing rejected");
+                console.log("error", "Pairing rejected");
                 clearConnHistory();
             }
 
             else if (type === "PAIR_SUCC") {
                 storage.set("roomKey", data.roomKey);
                 setPage("connectingPage");
-                updateStatus("waiting", "Pairing complete. Establishing connection");
+                console.log("waiting", "Pairing complete. Establishing connection");
                 pairWebSocket?.dispose();
                 createRoomWs(data.roomKey);
             } else if (type === "JOIN_ROOM_WAIT") {
                 setPage("joinRoomWaitPage");
-                updateStatus("waiting", "Waiting for the paired device");
+                console.log("waiting", "Waiting for the paired device");
             } else if (type === "JOIN_ROOM_SUCC") {
                 setPage("connectingPage");
                 await webRTC.createOffer(data);
@@ -156,12 +156,6 @@ export default function App() {
 
         const sendRoomSignal = (type: string, data: unknown = {}) => {
             roomWebSocket?.send(type, data);
-        };
-
-        const addActivity = (_entry: string) => undefined;
-
-        const updateStatus = (next: ConnectionStatus, text: string) => {
-            console.log(next, text);
         };
 
         const createPairWs = (targetPairKey?: string, passcode?: string) => {
@@ -214,7 +208,7 @@ export default function App() {
             storage.remove("roomKey");
             setPage("pairPage");
             createPairWs();
-            updateStatus("ready", "Ready to pair with another device");
+            console.log("ready", "Ready to pair with another device");
         };
 
         const fileRequestComes = (fileDetails: FileDetail[]) => {
@@ -262,7 +256,6 @@ export default function App() {
         const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
             sendSignal: sendRoomSignal,
             onRestartPeerConnection: () => roomWebSocket?.restart(),
-            updateStatus,
             onPeerConnectionState: (nextState) => {
                 if (nextState === "connected" || nextState === "completed") {
                     setPage("workPage");
@@ -270,8 +263,7 @@ export default function App() {
                 setPeerConnectionState(nextState);
             },
             onHeartbeat: setHeartbeatLatency,
-            addActivity,
-            setUserText,
+            userTextComes,
             fileRequestComes,
             setIsSendingFile,
             clearSelectedFiles,
@@ -298,24 +290,22 @@ export default function App() {
             setReceiveDialogOpen(false);
             webRTC.rejectFile();
         };
+
         pairRef.current = (targetKey) => {
             if (!targetKey.trim()) {
-                updateStatus("error", "Enter the other device's pairing code");
+                console.log("error", "Enter the other device's pairing code");
                 return;
             }
             const passcode = String(Math.floor(100000 + Math.random() * 900000));
             createPairWs(targetKey.trim(), passcode);
-            updateStatus("waiting", "Requesting a secure pairing");
+            console.log("waiting", "Requesting a secure pairing");
         }
-
-
         const roomKey = storage.get("roomKey");
         if (roomKey) {
             createRoomWs(roomKey);
         } else {
             createPairWs();
         }
-
         return () => {
             disconnectRef.current();
         };
@@ -362,7 +352,7 @@ export default function App() {
                 <TextWorkspace
                     value={userText}
                     palette={palette}
-                    onChangeText={setUserText}
+                    onChangeText={userTextComes}
                     onSend={(text) => sendTextRef.current(text)}
                 />
             <View style={{ height: 20 }} />
