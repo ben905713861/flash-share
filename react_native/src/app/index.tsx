@@ -53,17 +53,7 @@ export default function App() {
 
     const [peerConnectionState, setPeerConnectionState] = useState<RTCIceConnectionState>("new");
     const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-    // const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
-    // const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
-    // const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
-    // const [isSendingFile, setIsSendingFile] = useState(false);
     const [isSettingsOpen, setSettingsOpen] = useState(false);
-    // const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
-    // functions: sendText, sendFile, acceptFile, rejectFile, pair
-    // const sendTextRef = useRef<(text: string) => void>(() => {});
-    // const sendFileRef = useRef<(files: TransferFile[]) => void>(() => {});
-    // const acceptFileRef = useRef<() => Promise<void>>(async () => {});
-    // const rejectFileRef = useRef<() => void>(() => {});
     const webRTCRef = useRef<ReturnType<typeof createWebRTC>>(null);
 
     const disconnectRef = useRef<() => void>(() => {});

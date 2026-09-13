@@ -3,7 +3,6 @@ import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
-export type ConnectionStatus = "connecting" | "ready" | "waiting" | "connected" | "error";
 export type FileDetail = {
     filename: string;
     size: number;
