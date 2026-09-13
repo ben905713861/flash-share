@@ -96,6 +96,7 @@ export const createWebRTC = ({
     };
 
     const fileChannelInit = () => {
+        console.log('fileChannelInit')
         if (!fileChannel) {
             return;
         }
@@ -118,6 +119,7 @@ export const createWebRTC = ({
             }
         };
         channel.onclose = () => {
+            console.log("File channel closed")
             onFileChannelClose();
         };
     };
@@ -138,13 +140,19 @@ export const createWebRTC = ({
                 lastPongAt = Date.now();
                 const sentAt = Number(event.data.slice(5));
                 if (Number.isFinite(sentAt)) {
-                    onHeartbeat(Math.max(0, lastPongAt - sentAt));
+                    const latency = Math.max(0, lastPongAt - sentAt);
+                    console.debug("onHeartbeat=", latency)
+                    onHeartbeat(latency);
                 }
             }
+        };
+        heartBeatChannel.onclose = () => {
+            console.log("HeartBeat channel closed")
         };
     };
 
     const restartPeerConnection = () => {
+        console.log("restartPeerConnection");
         globalThis.clearTimeout(iceDisconnectTimer);
         globalThis.clearInterval(heartBeatInterval);
         heartBeatInterval = undefined;
@@ -194,9 +202,11 @@ export const createWebRTC = ({
                 console.log("connected", "Secure peer-to-peer connection active");
                 console.log("Devices connected directly");
             } else if (peer.iceConnectionState === "disconnected") {
+                console.log("iceConnectionState=", "disconnected");
                 iceDisconnectTimer = globalThis.setTimeout(() => {
                     if (peer?.iceConnectionState === "disconnected" || peer?.iceConnectionState === "failed") {
                         restartPeerConnection();
+                        console.log("onRestartPeerConnection");
                         onRestartPeerConnection();
                     }
                 }, 60000);
@@ -285,6 +295,7 @@ export const createWebRTC = ({
     };
 
     const createOffer = async (data: any) => {
+        console.log("createOffer, isOfferer=", data.isOfferer);
         if (!peer) {
             return;
         }

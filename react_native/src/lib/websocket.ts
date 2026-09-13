@@ -77,6 +77,7 @@ export const createWebSocket = ({
         };
         socket.onerror = () => socket.close();
         socket.onclose = (event: CloseEvent) => {
+            console.log("ws onclose");
             if (ws === socket) {
                 ws = null;
             }
