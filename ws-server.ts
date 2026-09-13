@@ -10,6 +10,7 @@ import * as http from "node:http";
 const PORT = 8787;
 const MAX_CONNECTIONS = 200;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
+const HEARTBEAT_INTERVAL_MS = 30_000;
 
 // const server = https.createServer({
 //   cert: fs.readFileSync("./cert/fullchain.pem"),
@@ -29,7 +30,23 @@ const wss = new WebSocketServer({
   perMessageDeflate: false,
 });
 
+const heartbeatInterval = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }
+}, HEARTBEAT_INTERVAL_MS);
+
+wss.on("close", () => {
+  clearInterval(heartbeatInterval);
+});
+
 wss.on("connection", (ws: WebSocket, request) => {
+  ws.on("pong", () => {
+    // Protocol-level pong received; the connection remains managed by the client.
+  });
+
   if (wss.clients.size > MAX_CONNECTIONS) {
     ws.close(1013, "Server is at connection capacity");
     return;
