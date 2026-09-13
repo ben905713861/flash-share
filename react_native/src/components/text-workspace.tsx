@@ -16,7 +16,9 @@ export interface TextWorkspaceRef {
 }
 
 export function TextWorkspace({ ref, palette, textChannelSend }: TextWorkspaceProps) {
-    const [userText, setUserText] = useState("");
+    const [userText, setUserText] = useState(() => storage.get(TEXT_STORAGE_KEY) ?? "");
+    const textChannelSendRef = useRef(textChannelSend);
+    textChannelSendRef.current = textChannelSend;
 
     useImperativeHandle(ref, () => ({
         setUserText
@@ -24,6 +26,11 @@ export function TextWorkspace({ ref, palette, textChannelSend }: TextWorkspacePr
 
     useEffect(() => {
         storage.set(TEXT_STORAGE_KEY, userText);
+        if (!userText.trim()) {
+            return;
+        }
+        const timer = setTimeout(() => textChannelSendRef.current(userText), 800);
+        return () => clearTimeout(timer);
     }, [userText]);
 
     return (
@@ -31,7 +38,7 @@ export function TextWorkspace({ ref, palette, textChannelSend }: TextWorkspacePr
             <TextInput
                 multiline
                 value={userText}
-                onChangeText={textChannelSend}
+                onChangeText={setUserText}
                 placeholder="Write a note for the other device..."
                 placeholderTextColor={palette.muted}
                 style={[s.messageInput, { color: palette.text, borderColor: palette.border }]}

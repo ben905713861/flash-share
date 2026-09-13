@@ -1,7 +1,7 @@
 import { Modal, Pressable, Text, View } from "react-native";
 import type { FileDetail, FileTransferProgress, FileTransferStatus } from "@/lib/webrtc";
 import { C, s } from "@/styles";
-import React, {useImperativeHandle, useState} from "react";
+import React, {useImperativeHandle, useRef, useState} from "react";
 
 import {
     pickTransferFiles,
@@ -86,14 +86,14 @@ export function FileWorkspace({
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
 
 
-    let wakeupFileSending: (() => void) | undefined;
-    let sendingFiles: TransferFile[] = [];
-    let isInterruptFileSending = false;
-    let dirPicker: ReceiveDirectory | undefined;
-    let writable: ReceiveFile | undefined;
-    let fileHandle: ReceiveFile | undefined;
-    let chunkIndex = 0;
-    let interruptFileSending: (() => void) | undefined;
+    const wakeupFileSendingRef = useRef<(() => void) | undefined>(undefined);
+    const sendingFilesRef = useRef<TransferFile[]>([]);
+    const isInterruptFileSendingRef = useRef(false);
+    const dirPickerRef = useRef<ReceiveDirectory | undefined>(undefined);
+    const writableRef = useRef<ReceiveFile | undefined>(undefined);
+    const fileHandleRef = useRef<ReceiveFile | undefined>(undefined);
+    const chunkIndexRef = useRef(0);
+    const interruptFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
     const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
@@ -117,7 +117,7 @@ export function FileWorkspace({
             initFileProgress(fileDetails);
         } else if (type === "file-request-ack") {
             updateFileTransferStatus("queued");
-            const file = sendingFiles[0];
+            const file = sendingFilesRef.current[0];
             if (file) {
                 fileChannelSend({ type: "file-start", filename: file.name, size: file.size });
             }
@@ -128,12 +128,12 @@ export function FileWorkspace({
         } else if (type === "file-start") {
             const { filename, size } = payload;
             try {
-                if (!dirPicker) {
+                if (!dirPickerRef.current) {
                     throw new Error("No receive directory selected");
                 }
-                fileHandle = createReceiveFile(dirPicker, filename);
-                writable = fileHandle;
-                chunkIndex = 0;
+                fileHandleRef.current = createReceiveFile(dirPickerRef.current, filename);
+                writableRef.current = fileHandleRef.current;
+                chunkIndexRef.current = 0;
                 updateFileTransferProgress(filename, 0, "transferring");
                 fileChannelSend({ type: "file-start-ack", filename, size });
             } catch (e) {
@@ -143,7 +143,7 @@ export function FileWorkspace({
             }
         } else if (type === "file-start-ack") {
             const { filename } = payload;
-            const file = sendingFiles.find((item) => item.name === filename);
+            const file = sendingFilesRef.current.find((item) => item.name === filename);
             if (!file) {
                 return;
             }
@@ -154,22 +154,22 @@ export function FileWorkspace({
                 fileChannelSend({ type: "file-end", filename, size: file.size });
             } catch (e) {
                 console.warn("failed to send file, ", filename, e);
-                sendingFiles = [];
+                sendingFilesRef.current = [];
                 setIsSendingFile(false);
                 updateFileTransferProgress(filename, 0, "failed");
                 fileChannelSend({ type: "file-send-error", filename });
             }
         } else if (type === "file-continue") {
-            wakeupFileSending?.();
+            wakeupFileSendingRef.current?.();
         } else if (type === "file-abort") {
-            interruptFileSending?.();
+            interruptFileSendingRef.current?.();
         } else if (type === "file-end") {
             const { filename, size } = payload;
             try {
-                const receivedSize = fileHandle && await getFileSize(fileHandle);
-                writable = undefined;
+                const receivedSize = fileHandleRef.current && await getFileSize(fileHandleRef.current);
+                writableRef.current = undefined;
                 if (receivedSize === size) {
-                    await finalizeReceiveFile(fileHandle!);
+                    await finalizeReceiveFile(fileHandleRef.current!);
                     updateFileTransferProgress(filename, size, "completed");
                     fileChannelSend({ type: "file-end-ack", filename, size });
                     console.log(`Received ${filename}`);
@@ -185,15 +185,15 @@ export function FileWorkspace({
             }
         } else if (type === "file-end-ack") {
             const { filename, size } = payload;
-            sendingFiles = sendingFiles.filter((item) => item.name !== filename);
+            sendingFilesRef.current = sendingFilesRef.current.filter((item) => item.name !== filename);
             updateFileTransferProgress(filename, size, "completed");
             // task completed
-            if (sendingFiles.length === 0) {
+            if (sendingFilesRef.current.length === 0) {
                 setIsSendingFile(false);
                 clearSelectedFiles();
                 console.log("File transfer completed");
             } else {
-                const file = sendingFiles[0];
+                const file = sendingFilesRef.current[0];
                 updateFileTransferProgress(file.name, 0, "transferring");
                 fileChannelSend({ type: "file-start", filename: file.name, size: file.size });
             }
@@ -204,23 +204,23 @@ export function FileWorkspace({
         ) {
             const { filename } = payload;
             console.warn("file transferring", type, filename);
-            sendingFiles = [];
+            sendingFilesRef.current = [];
             setIsSendingFile(false);
             updateFileTransferProgress(filename, -1, "failed");
         }
     }
 
     const onFileChannelReceiveBytes = async (bytes: any) => {
-        if (!writable) {
+        if (!writableRef.current) {
             return;
         }
         try {
-            await appendFileChunk(writable, bytes);
-            chunkIndex += 1;
-            if (chunkIndex % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
-                updateFileTransferProgress(fileHandle!.name, chunkIndex * FILE_CHUNK_SIZE, "transferring");
+            await appendFileChunk(writableRef.current, bytes);
+            chunkIndexRef.current += 1;
+            if (chunkIndexRef.current % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
+                updateFileTransferProgress(fileHandleRef.current!.name, chunkIndexRef.current * FILE_CHUNK_SIZE, "transferring");
             }
-            if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+            if (chunkIndexRef.current % FILE_CHUNK_WINDOW === 0) {
                 fileChannelSend({ type: "file-continue" });
             }
         } catch (e) {
@@ -228,26 +228,22 @@ export function FileWorkspace({
             debugger
             fileChannelSend({ type: "file-abort" });
             try {
-                if (fileHandle) {
-                    await deleteFile(fileHandle);
+                if (fileHandleRef.current) {
+                    await deleteFile(fileHandleRef.current);
                 }
             } catch {
             }
-            writable = undefined;
-            updateFileTransferProgress(fileHandle!.name, -1, "failed");
+            writableRef.current = undefined;
+            if (fileHandleRef.current) {
+                updateFileTransferProgress(fileHandleRef.current.name, -1, "failed");
+            }
         }
     }
 
-    useImperativeHandle(ref, () => ({
-        onFileChannelReceiveText,
-        onFileChannelReceiveBytes,
-        onFileChannelClose,
-    }), []);
-
     const sendSingleFile = async (file: TransferFile) => {
-        isInterruptFileSending = false;
-        interruptFileSending = () => {
-            isInterruptFileSending = true;
+        isInterruptFileSendingRef.current = false;
+        interruptFileSendingRef.current = () => {
+            isInterruptFileSendingRef.current = true;
         };
         // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
         // React Native's Blob implementation does not support that input.
@@ -255,7 +251,7 @@ export function FileWorkspace({
         const readHandle = await openFileForReading(file);
         try {
             for (let offset = 0, chunkIndex = 0; offset < file.size;) {
-                if (isInterruptFileSending) {
+                if (isInterruptFileSendingRef.current) {
                     throw new Error("File transfer aborted");
                 }
                 const chunk = await readFileChunk(readHandle, FILE_CHUNK_SIZE);
@@ -270,9 +266,9 @@ export function FileWorkspace({
                 }
                 if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
                     await new Promise<void>((resolve, reject) => {
-                        wakeupFileSending = resolve;
-                        interruptFileSending = () => {
-                            isInterruptFileSending = true;
+                        wakeupFileSendingRef.current = resolve;
+                        interruptFileSendingRef.current = () => {
+                            isInterruptFileSendingRef.current = true;
                             reject(new Error("File transfer aborted"));
                         };
                     });
@@ -285,13 +281,13 @@ export function FileWorkspace({
 
 
     const sendFiles = (files: TransferFile[]) => {
-        setIsSendingFile(true);
         if (files.length === 0) {
-            setIsSendingFile(false);
-            throw new Error("no file is selected");
+            showAlert("No files selected", "Choose at least one file to share.");
+            return;
         }
-        sendingFiles = [...files];
-        const fileDetails: FileDetail[] = sendingFiles.map((file) => {
+        setIsSendingFile(true);
+        sendingFilesRef.current = [...files];
+        const fileDetails: FileDetail[] = sendingFilesRef.current.map((file) => {
             return { filename: file.name, size: file.size };
         });
         const succ = fileChannelSend({
@@ -299,8 +295,10 @@ export function FileWorkspace({
             fileDetails,
         });
         if (!succ) {
+            sendingFilesRef.current = [];
             setIsSendingFile(false);
-            throw new Error("failed to send files");
+            showAlert("Unable to send files", "Connect to the other device before sending files.");
+            return;
         }
         initFileProgress(fileDetails);
         console.log("Waiting for the other device to approve file transfer");
@@ -308,7 +306,7 @@ export function FileWorkspace({
 
     const acceptFiles = async () => {
         try {
-            dirPicker = await pickReceiveDirectory();
+            dirPickerRef.current = await pickReceiveDirectory();
             updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
             setReceiveDialogOpen(false);
@@ -325,10 +323,16 @@ export function FileWorkspace({
     };
 
     const onFileChannelClose = () => {
-        interruptFileSending?.();
+        interruptFileSendingRef.current?.();
         setIsSendingFile(false);
         updateFileTransferStatus("failed");
     };
+
+    useImperativeHandle(ref, () => ({
+        onFileChannelReceiveText,
+        onFileChannelReceiveBytes,
+        onFileChannelClose,
+    }), [onFileChannelReceiveText, onFileChannelReceiveBytes, onFileChannelClose]);
 
     const hasDuplicateFilenames = (files: TransferFile[]) => {
         const names = new Set<string>();
