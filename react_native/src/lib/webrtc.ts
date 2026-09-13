@@ -147,6 +147,7 @@ export const createWebRTC = ({
     const restartPeerConnection = () => {
         globalThis.clearTimeout(iceDisconnectTimer);
         globalThis.clearInterval(heartBeatInterval);
+        heartBeatInterval = undefined;
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();
@@ -341,6 +342,7 @@ export const createWebRTC = ({
     const dispose = () => {
         globalThis.clearTimeout(iceDisconnectTimer);
         globalThis.clearInterval(heartBeatInterval);
+        heartBeatInterval = undefined;
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();
