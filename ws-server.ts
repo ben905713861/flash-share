@@ -5,14 +5,18 @@ import { randomUUID } from "crypto";
 import RoomService from "./room-service";
 import {PairService} from "./pair-service";
 import MessageRateService from "./message-rate-service";
+import * as http from "node:http";
 
 const PORT = 8787;
 const MAX_CONNECTIONS = 200;
 const MAX_PAYLOAD_BYTES = 256 * 1024;
 
-const server = https.createServer({
-  cert: fs.readFileSync("./cert/fullchain.pem"),
-  key: fs.readFileSync("./cert/privkey.pem"),
+// const server = https.createServer({
+//   cert: fs.readFileSync("./cert/fullchain.pem"),
+//   key: fs.readFileSync("./cert/privkey.pem"),
+// });
+
+const server = http.createServer({
 });
 
 const messageRateService = new MessageRateService();
