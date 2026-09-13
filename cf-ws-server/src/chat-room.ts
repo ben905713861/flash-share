@@ -8,6 +8,7 @@ const MAX_MESSAGES_PER_WINDOW = 100;
 type ChatAttachment = {
 	windowStartedAt: number;
 	messageCount: number;
+	isOfferer: boolean;
 };
 
 function sendMsg(ws: WebSocket, type: string, data?: unknown) {
@@ -53,6 +54,7 @@ export class ChatRoom extends DurableObject<Env> {
 			server.serializeAttachment({
 				windowStartedAt: Date.now(),
 				messageCount: 0,
+				isOfferer: wsList.length === 0,
 			} satisfies ChatAttachment);
 
 			this.joinRoom();
@@ -66,8 +68,9 @@ export class ChatRoom extends DurableObject<Env> {
 		if (wsList.length === 1) {
 			sendMsg(wsList[0], "JOIN_ROOM_WAIT");
 		} else {
-			wsList.forEach((item, index) => {
-				sendMsg(item, "JOIN_ROOM_SUCC", {isOfferer: index === 0})
+			wsList.forEach((ws) => {
+				const attachment = this.getAttachment(ws);
+				sendMsg(ws, "JOIN_ROOM_SUCC", { isOfferer: attachment?.isOfferer });
 			});
 		}
 	}
@@ -100,7 +103,27 @@ export class ChatRoom extends DurableObject<Env> {
 			.filter(peer => peer !== ws);
 		targetWsList.forEach((targetWs) => {
 			targetWs.send(message);
-		})
+		});
+	}
+
+	async webSocketClose(_ws: WebSocket) {
+		await this.state.blockConcurrencyWhile(async () => {
+			const wsList = this.state.getWebSockets()
+				.filter(ws => ws.readyState === WebSocket.OPEN);
+			if (wsList.length !== 1) {
+				return;
+			}
+
+			// If the current offerer leaves, the remaining connection must take
+			// over so the next join can establish a new WebRTC offer.
+			const remainingWs = wsList[0];
+			const attachment = this.getAttachment(remainingWs);
+			remainingWs.serializeAttachment({
+				windowStartedAt: attachment?.windowStartedAt ?? Date.now(),
+				messageCount: attachment?.messageCount ?? 0,
+				isOfferer: true,
+			} satisfies ChatAttachment);
+		});
 	}
 
 	private getAttachment(ws: WebSocket): ChatAttachment | null {
