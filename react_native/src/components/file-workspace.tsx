@@ -23,7 +23,6 @@ import {showAlert} from "@/components/alert-modal";
 const FILE_CHUNK_SIZE = 256 * 1024;
 const FILE_CHUNK_WINDOW = 16;
 const FILE_PROGRESS_CHUNK_INTERVAL = 4;
-const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 type FileWorkspaceProps = {
     ref: React.Ref<FileWorkspaceRef>;
@@ -76,15 +75,10 @@ const formatBytes = (bytes: number) => {
 export function FileWorkspace({
                                   ref,
                                   palette,
-                                  // onSelectFiles,
-                                  // onSendFiles,
-                                  // onAcceptFiles,
-                                  // onRejectFiles,
                                   fileChannelSend,
                                   fileChannelSendBytes,
-                                }: FileWorkspaceProps) {
+                              }: FileWorkspaceProps) {
     const [fileTransferProgress, setFileTransferProgress] = useState<FileTransferProgress[]>([]);
-
 
     const wakeupFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const sendingFilesRef = useRef<TransferFile[]>([]);
@@ -129,7 +123,8 @@ export function FileWorkspace({
             const { filename, size } = payload;
             try {
                 if (!dirPickerRef.current) {
-                    throw new Error("No receive directory selected");
+                    showAlert("No receive directory selected");
+                    return;
                 }
                 fileHandleRef.current = createReceiveFile(dirPickerRef.current, filename);
                 writableRef.current = fileHandleRef.current;

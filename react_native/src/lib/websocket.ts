@@ -8,7 +8,6 @@ type WebSocketOptions = {
     type: "pair" | "room";
     attachData: Record<string, string | undefined>,
     onConnecting?: () => void;
-    onOpen?: () => void;
     onClose?: (event: CloseEvent) => boolean;
     onMessage: (type: string, data: any) => void;
 };
@@ -18,7 +17,6 @@ export const createWebSocket = ({
                                     attachData,
                                     onConnecting,
                                     onClose,
-                                    onOpen,
                                     onMessage }: WebSocketOptions) => {
     let ws: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -63,7 +61,6 @@ export const createWebSocket = ({
         ws = socket;
         socket.onopen = () => {
             clearReconnectTimer();
-            onOpen?.();
         };
         socket.onmessage = (event) => {
             let message: { type: string; data: unknown };

@@ -65,6 +65,7 @@ export default function App() {
     useEffect(() => {
         let pairWebSocket: ReturnType<typeof createWebSocket> | undefined;
         let roomWebSocket: ReturnType<typeof createWebSocket> | undefined;
+        let webRTC: ReturnType<typeof createWebRTC> | undefined;
 
         const handleSignalError = (error: unknown) => {
             console.error("Failed to handle signaling message", error);
@@ -115,13 +116,15 @@ export default function App() {
                 console.log("waiting", "Waiting for the paired device");
             } else if (type === "JOIN_ROOM_SUCC") {
                 setPage("connectingPage");
+                webRTC?.dispose();
+                webRTC = webRTCRef.current = connectWebrtc();
                 await webRTC.createOffer(data);
             } else if (type === "SDP") {
-                await webRTC.sdp(data);
+                await webRTC?.sdp(data);
             } else if (type === "SDP_ANSWER") {
-                await webRTC.sdpAnswer(data);
+                await webRTC?.sdpAnswer(data);
             } else if (type === "ICE") {
-                await webRTC.iceSwap(data);
+                await webRTC?.iceSwap(data);
             } else if (type === "EXIT") {
                 restartSession();
             }
@@ -180,7 +183,7 @@ export default function App() {
         };
 
         const clearConnHistory = () => {
-            webRTC.dispose();
+            webRTC?.dispose();
             setTargetPairKey("");
             storage.remove("roomKey");
             setPage("pairPage");
@@ -188,27 +191,27 @@ export default function App() {
             console.log("ready", "Ready to pair with another device");
         };
 
-        const webRTC: ReturnType<typeof createWebRTC> = createWebRTC({
-            sendSignal: sendRoomSignal,
-            onRestartPeerConnection: () => roomWebSocket?.restart(),
-            onPeerConnectionState: (nextState) => {
-                if (nextState === "connected" || nextState === "completed") {
-                    setPage("workPage");
-                }
-                setPeerConnectionState(nextState);
-            },
-            onHeartbeat: setHeartbeatLatency,
-            onDataChannelReceiveText: (value) => { textWorkspaceRef.current?.setUserText(value) },
-            onFileChannelReceiveText: (value) => { fileWorkspaceRef.current?.onFileChannelReceiveText(value) },
-            onFileChannelReceiveBytes: async (bytes) => { fileWorkspaceRef.current?.onFileChannelReceiveBytes(bytes) },
-            onFileChannelClose: () => { fileWorkspaceRef.current?.onFileChannelClose() },
-        });
-        webRTCRef.current = webRTC;
-
+        const connectWebrtc = (): ReturnType<typeof createWebRTC> => {
+            return createWebRTC({
+                sendSignal: sendRoomSignal,
+                onRestartPeerConnection: () => roomWebSocket?.restart(),
+                onPeerConnectionState: (nextState) => {
+                    if (nextState === "connected" || nextState === "completed") {
+                        setPage("workPage");
+                    }
+                    setPeerConnectionState(nextState);
+                },
+                onHeartbeat: setHeartbeatLatency,
+                onDataChannelReceiveText: (value) => { textWorkspaceRef.current?.setUserText(value) },
+                onFileChannelReceiveText: (value) => { fileWorkspaceRef.current?.onFileChannelReceiveText(value) },
+                onFileChannelReceiveBytes: async (bytes) => { fileWorkspaceRef.current?.onFileChannelReceiveBytes(bytes) },
+                onFileChannelClose: () => { fileWorkspaceRef.current?.onFileChannelClose() },
+            });
+        };
 
         exitSignalRef.current = () => sendRoomSignal("EXIT");
         disconnectRef.current = () => {
-            webRTC.dispose();
+            webRTC?.dispose();
             pairWebSocket?.dispose();
             pairWebSocket = undefined;
             roomWebSocket?.dispose();

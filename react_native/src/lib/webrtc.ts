@@ -43,13 +43,6 @@ export const createWebRTC = ({
     onFileChannelReceiveText,
     onFileChannelReceiveBytes,
     onFileChannelClose,
-
-    // fileRequestComes,
-    // setIsSendingFile,
-    // clearSelectedFiles,
-    // initFileProgress,
-    // updateFileTransferProgress,
-    // updateFileTransferStatus,
 }: WebRTCOptions) => {
     let peer: RTCPeerConnection | null = null;
     let dataChannel: RTCDataChannel | null = null;
@@ -313,8 +306,8 @@ export const createWebRTC = ({
         try {
             await peer.setLocalDescription(await peer.createOffer());
             sendSignal("SDP", peer.localDescription);
-        } catch {
-            console.log("error", "Unable to create a peer connection");
+        } catch (e) {
+            console.log("error", "Unable to create a peer connection", e);
         }
     };
 
