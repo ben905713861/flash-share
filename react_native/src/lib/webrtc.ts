@@ -1,6 +1,7 @@
 
 import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
+const HEART_BEAT_INTERVAL = 5000;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 export type FileDetail = {
@@ -24,12 +25,6 @@ type WebRTCOptions = {
     onFileChannelReceiveText: (value: string) => void;
     onFileChannelReceiveBytes: (bytes: any) => Promise<void>;
     onFileChannelClose: () => void;
-    // fileRequestComes: (fileDetails: FileDetail[]) => void;
-    // setIsSendingFile: (value: boolean) => void;
-    // clearSelectedFiles: () => void;
-    // initFileProgress: (fileDetails: FileDetail[]) => void;
-    // updateFileTransferProgress: (filename: string, transferred: number, status: FileTransferStatus) => void;
-    // updateFileTransferStatus: (status: FileTransferStatus) => void;
 };
 
 const FILE_BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024;
@@ -53,6 +48,7 @@ export const createWebRTC = ({
     let canAddIceCandidate = false;
     let lastPingAt = Date.now();
     let lastPongAt = Date.now();
+    let heartbeatLatency: number = 0;
     const iceBuffer: RTCIceCandidate[] = [];
 
     const addBufferedIce = async () => {
@@ -67,11 +63,19 @@ export const createWebRTC = ({
             return;
         }
         heartBeatInterval = globalThis.setInterval(() => {
-            if (heartBeatChannel?.readyState === "open") {
-                lastPingAt = Date.now();
-                heartBeatChannel.send(`ping:${lastPingAt}`);
+            sendHeartBeat();
+        }, HEART_BEAT_INTERVAL);
+    };
+
+    const sendHeartBeat = () => {
+        if (heartBeatChannel?.readyState === "open") {
+            if (lastPingAt > lastPongAt) {
+                heartbeatLatency = Date.now() - lastPingAt;
+                onHeartbeat(heartbeatLatency);
             }
-        }, 5000);
+            lastPingAt = Date.now();
+            heartBeatChannel.send(`ping:${lastPingAt}`);
+        }
     };
 
 
@@ -129,13 +133,15 @@ export const createWebRTC = ({
                 heartBeatChannel?.send(event.data.replace("ping:", "pong:"));
             }
             if (event.data.startsWith("pong:")) {
-                lastPongAt = Date.now();
                 const sentAt = Number(event.data.slice(5));
-                if (Number.isFinite(sentAt)) {
-                    const latency = Math.max(0, lastPongAt - sentAt);
-                    console.debug("onHeartbeat=", latency)
-                    onHeartbeat(latency);
+                // Ignore malformed or stale responses so they cannot mask a missed ping.
+                if (!Number.isFinite(sentAt) || sentAt !== lastPingAt) {
+                    return;
                 }
+                lastPongAt = Date.now();
+                heartbeatLatency = Math.max(0, lastPongAt - sentAt);
+                console.debug("heartbeatLatency=", heartbeatLatency)
+                onHeartbeat(heartbeatLatency);
             }
         };
         heartBeatChannel.onclose = () => {
@@ -345,14 +351,27 @@ export const createWebRTC = ({
     };
 
     const isConnectionHealthy = (): boolean => {
-        console.log("iceConnectionState", peer?.iceConnectionState);
-        return peer?.iceConnectionState === "connected" || peer?.iceConnectionState === "completed";
+        const iceState = peer?.iceConnectionState;
+        console.log("isConnectionHealthy, iceState=", iceState);
+        if (iceState !== "connected" && iceState !== "completed") {
+            return false;
+        }
+        console.log("dataChannel, fileChannel, heartBeatChannel, readyState=",
+            dataChannel?.readyState, fileChannel?.readyState, heartBeatChannel?.readyState);
+        if (dataChannel?.readyState !== "open"
+            || fileChannel?.readyState !== "open"
+            || heartBeatChannel?.readyState !== "open") {
+            return false;
+        }
+        return true;
     };
 
     const dispose = () => {
         globalThis.clearTimeout(iceDisconnectTimer);
+        iceDisconnectTimer = undefined;
         globalThis.clearInterval(heartBeatInterval);
         heartBeatInterval = undefined;
+        heartbeatLatency = 0;
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();
