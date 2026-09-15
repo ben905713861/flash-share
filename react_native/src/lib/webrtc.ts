@@ -4,16 +4,6 @@ import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 const HEART_BEAT_INTERVAL = 5000;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
-export type FileDetail = {
-    filename: string;
-    size: number;
-};
-export type FileTransferProgress = {
-    transferred: number;
-    status: FileTransferStatus;
-} & FileDetail;
-export type FileTransferStatus = "awaiting_approval" | "queued" | "transferring" | "completed" | "declined" | "failed";
-
 type RTCDataChannel = ReturnType<RTCPeerConnection["createDataChannel"]>;
 
 type WebRTCOptions = {

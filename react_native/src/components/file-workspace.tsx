@@ -1,5 +1,4 @@
 import { Modal, Pressable, Text, View } from "react-native";
-import type { FileDetail, FileTransferProgress, FileTransferStatus } from "@/lib/webrtc";
 import { C, s } from "@/styles";
 import React, {useImperativeHandle, useRef, useState} from "react";
 
@@ -47,7 +46,7 @@ const transferStatusColors: Record<FileTransferStatus, { backgroundColor: string
 
 type FileRequest = {
     type: "file-request";
-    fileDetails: FileDetail[];
+    fileDetails: TransferFile[];
 } | {
     type: "file-request-ack" | "file-request-reject" | "file-continue" | "file-abort";
 } | {
@@ -58,6 +57,13 @@ type FileRequest = {
     type: "file-send-error";
     filename: string;
 };
+
+type FileTransferProgress = {
+    transferred: number;
+    status: FileTransferStatus;
+} & TransferFile;
+
+type FileTransferStatus = "awaiting_approval" | "queued" | "transferring" | "completed" | "declined" | "failed";
 
 export interface FileWorkspaceRef {
     onFileChannelReceiveText: (message: string) => Promise<void>;
@@ -89,7 +95,7 @@ export function FileWorkspace({
     const chunkIndexRef = useRef(0);
     const interruptFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
-    const [incomingFiles, setIncomingFiles] = useState<FileDetail[]>([]);
+    const [incomingFiles, setIncomingFiles] = useState<TransferFile[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
 
@@ -282,8 +288,8 @@ export function FileWorkspace({
         }
         setIsSendingFile(true);
         sendingFilesRef.current = [...files];
-        const fileDetails: FileDetail[] = sendingFilesRef.current.map((file) => {
-            return { filename: file.name, size: file.size };
+        const fileDetails: TransferFile[] = sendingFilesRef.current.map((file) => {
+            return { name: file.name, size: file.size };
         });
         const succ = fileChannelSend({
             type: "file-request",
@@ -360,12 +366,12 @@ export function FileWorkspace({
         setSelectedFiles([]);
     };
 
-    const fileRequestComes = (fileDetails: FileDetail[]) => {
+    const fileRequestComes = (fileDetails: TransferFile[]) => {
         setIncomingFiles(fileDetails);
         setReceiveDialogOpen(true);
     };
 
-    const initFileProgress = (fileDetails: FileDetail[]) => {
+    const initFileProgress = (fileDetails: TransferFile[]) => {
         const fileProgressList: FileTransferProgress[] = fileDetails.map(fileDetail => {
             return {
                 ...fileDetail,
@@ -379,7 +385,7 @@ export function FileWorkspace({
     const updateFileTransferProgress = (filename: string, transferred: number, status: FileTransferStatus) => {
         setFileTransferProgress((fileProgressList) => {
             return fileProgressList.map(fileProgress => {
-                if (fileProgress.filename === filename) {
+                if (fileProgress.name === filename) {
                     return {
                         ...fileProgress,
                         status,
@@ -422,9 +428,9 @@ export function FileWorkspace({
                     <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
                     {fileTransferProgress.map((file) => {
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
-                        return <View key={file.filename} style={s.transferFile}>
+                        return <View key={file.name} style={s.transferFile}>
                             <View style={s.transferSummary}>
-                                <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.filename}</Text>
+                                <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.name}</Text>
                                 <Text style={[s.transferStatus, transferStatusColors[file.status]]}>{transferStatusLabel[file.status]}</Text>
                             </View>
                             {(file.status === "transferring" || file.status === "completed") && <>
@@ -448,8 +454,8 @@ export function FileWorkspace({
                     <Text style={[s.heading, { color: palette.text }]}>Incoming files</Text>
                     <Text style={{ color: palette.muted }}>The paired device wants to send {incomingFiles.length} file{incomingFiles.length <= 1 ? "" : "s"}.</Text>
                     {incomingFiles.map((file) => (
-                        <View style={s.incomingFile} key={file.filename}>
-                            <Text style={{ color: palette.text }}>{file.filename}</Text>
+                        <View style={s.incomingFile} key={file.name}>
+                            <Text style={{ color: palette.text }}>{file.name}</Text>
                             <Text style={{ color: palette.muted }}>{formatBytes(file.size)}</Text>
                         </View>
                     ))}
