@@ -71,6 +71,53 @@ export interface FileWorkspaceRef {
     onFileChannelClose: () => void,
 }
 
+const parseFileRequest = (message: string): FileRequest | undefined => {
+    let value: unknown;
+    try {
+        value = JSON.parse(message);
+    } catch (error) {
+        console.warn("Ignoring malformed file transfer message", error);
+        return undefined;
+    }
+    if (!value || typeof value !== "object" || !("type" in value) || typeof value.type !== "string") {
+        console.warn("Ignoring invalid file transfer message");
+        return undefined;
+    }
+    const payload = value as Record<string, unknown>;
+    const type = payload.type as string;
+    const requestTypes = new Set(["file-request-ack", "file-request-reject", "file-continue", "file-abort"]);
+    if (requestTypes.has(type)) {
+        return {type} as FileRequest;
+    }
+    if (type === "file-request") {
+        if (!Array.isArray(payload.fileDetails) || !payload.fileDetails.every((file) => {
+            if (!file || typeof file !== "object") return false;
+            const detail = file as Record<string, unknown>;
+            return typeof detail.name === "string" && Number.isFinite(detail.size) && (detail.size as number) >= 0;
+        })) {
+            console.warn("Ignoring invalid file request details");
+            return undefined;
+        }
+        return {type, fileDetails: payload.fileDetails as TransferFile[]};
+    }
+
+    const fileMessageTypes = new Set(["file-start", "file-start-ack", "file-start-reject", "file-end", "file-end-ack", "file-end-reject"]);
+    if (fileMessageTypes.has(type)) {
+        if (typeof payload.filename !== "string" || !Number.isFinite(payload.size) || (payload.size as number) < 0) {
+            console.warn("Ignoring invalid file transfer metadata");
+            return undefined;
+        }
+        return {type, filename: payload.filename, size: payload.size as number} as FileRequest;
+    }
+
+    if (type === "file-send-error" && typeof payload.filename === "string") {
+        return {type, filename: payload.filename};
+    }
+
+    console.warn("Ignoring unknown file transfer message type", type);
+    return undefined;
+};
+
 const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";
     const units = ["B", "KB", "MB", "GB"];
@@ -101,11 +148,8 @@ export function FileWorkspace({
 
 
     const onFileChannelReceiveText = async (message: string) => {
-        let payload: FileRequest;
-        try {
-            payload = JSON.parse(message) as FileRequest;
-        } catch (error) {
-            console.warn("Ignoring malformed file transfer message", error);
+        const payload = parseFileRequest(message);
+        if (!payload) {
             return;
         }
         const { type } = payload;
@@ -130,6 +174,7 @@ export function FileWorkspace({
             try {
                 if (!dirPickerRef.current) {
                     showAlert("No receive directory selected");
+                    fileChannelSend({ type: "file-start-reject", filename, size });
                     return;
                 }
                 fileHandleRef.current = createReceiveFile(dirPickerRef.current, filename);
@@ -170,7 +215,7 @@ export function FileWorkspace({
             const { filename, size } = payload;
             try {
                 const fileHandle = fileHandleRef.current;
-                if (!isReceivingFileRef.current || !fileHandle) {
+                if (!isReceivingFileRef.current || !fileHandle || fileHandle.name !== filename) {
                     isReceivingFileRef.current = false;
                     fileHandleRef.current = undefined;
                     fileChannelSend({ type: "file-end-reject", filename, size });
@@ -335,6 +380,10 @@ export function FileWorkspace({
 
     const onFileChannelClose = () => {
         interruptFileSendingRef.current?.();
+        const fileHandle = fileHandleRef.current;
+        if (isReceivingFileRef.current && fileHandle) {
+            void Promise.resolve(deleteFile(fileHandle)).catch(() => undefined);
+        }
         isReceivingFileRef.current = false;
         fileHandleRef.current = undefined;
         setIsSendingFile(false);
