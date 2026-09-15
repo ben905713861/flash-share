@@ -371,9 +371,8 @@ export function FileWorkspace({
             updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
             setReceiveDialogOpen(false);
-        } catch {
-            updateFileTransferStatus("declined");
-            fileChannelSend({ type: "file-request-reject" });
+        } catch (e) {
+            console.info("user rejected pickReceiveDirectory.", e);
         }
     };
 
