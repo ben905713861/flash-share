@@ -263,20 +263,20 @@ export default function App() {
     };
 
     const renderConnectedWorkspace = () => (
-        <View style={s.workspace}>
-                <TextWorkspace
-                    ref={textWorkspaceRef}
-                    palette={palette}
-                    textChannelSend={ (value) => { webRTCRef.current?.textChannelSend(value) } }
-                />
+        <>
+            <TextWorkspace
+                ref={textWorkspaceRef}
+                palette={palette}
+                textChannelSend={ (value) => { webRTCRef.current?.textChannelSend(value) } }
+            />
             <View style={{ height: 20 }} />
-                <FileWorkspace
-                    ref={fileWorkspaceRef}
-                    palette={palette}
-                    fileChannelSend={ (value) => webRTCRef.current!.fileChannelSend(value) }
-                    fileChannelSendBytes={ (value) => webRTCRef.current!.fileChannelSendBytes(value) }
-                />
-        </View>
+            <FileWorkspace
+                ref={fileWorkspaceRef}
+                palette={palette}
+                fileChannelSend={ (value) => webRTCRef.current!.fileChannelSend(value) }
+                fileChannelSendBytes={ (value) => webRTCRef.current!.fileChannelSendBytes(value) }
+            />
+        </>
     );
 
     return (
@@ -337,9 +337,10 @@ export default function App() {
                         </Pressable>
                     </View>
                 </View>
-                {page === "workPage" &&
-                    renderConnectedWorkspace()
-                }
+                <View style={[s.workspace, page !== "workPage" && { display: "none" }]}>
+                    {renderConnectedWorkspace()}
+                </View>
+
                 {page === "joinRoomWaitPage" && (
                     <View
                         style={[
