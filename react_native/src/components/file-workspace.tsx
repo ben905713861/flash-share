@@ -156,6 +156,11 @@ export function FileWorkspace({
         console.log("peer connection payload type", type);
         if (type === "file-request") {
             const { fileDetails } = payload;
+            // A previously declined/failed send remains queued for retry. Receiving a
+            // new request starts a separate transfer and must clear that stale queue.
+            if (!isSendingFile) {
+                sendingFilesRef.current = [];
+            }
             console.log("Received file requested, fileDetails", fileDetails);
             fileRequestComes(fileDetails);
             initFileProgress(fileDetails);
