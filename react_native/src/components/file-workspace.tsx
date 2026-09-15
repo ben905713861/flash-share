@@ -202,7 +202,6 @@ export function FileWorkspace({
                 fileChannelSend({ type: "file-end", filename, size: file.size });
             } catch (e) {
                 console.warn("failed to send file, ", filename, e);
-                sendingFilesRef.current = [];
                 setIsSendingFile(false);
                 updateFileTransferProgress(filename, 0, "failed");
                 fileChannelSend({ type: "file-send-error", filename });
@@ -262,7 +261,6 @@ export function FileWorkspace({
         ) {
             const { filename } = payload;
             console.warn("file transferring", type, filename);
-            sendingFilesRef.current = [];
             setIsSendingFile(false);
             updateFileTransferProgress(filename, -1, "failed");
         }
@@ -351,13 +349,20 @@ export function FileWorkspace({
             fileDetails,
         });
         if (!succ) {
-            sendingFilesRef.current = [];
             setIsSendingFile(false);
             showAlert("Unable to send files", "Connect to the other device before sending files.");
             return;
         }
+        clearSelectedFiles();
         initFileProgress(fileDetails);
         console.log("Waiting for the other device to approve file transfer");
+    };
+
+    const retryRemainingFiles = () => {
+        if (isSendingFile || sendingFilesRef.current.length === 0) {
+            return;
+        }
+        sendFiles(sendingFilesRef.current);
     };
 
     const acceptFiles = async () => {
@@ -418,9 +423,11 @@ export function FileWorkspace({
         if (hasDuplicateFilenames(result.result)) {
             setSelectedFiles([]);
             showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
-            return;
+        } else {
+            setSelectedFiles(result.result);
         }
-        setSelectedFiles(result.result);
+        sendingFilesRef.current = [];
+        setFileTransferProgress([]);
     };
 
     const clearSelectedFiles = () => {
@@ -469,10 +476,8 @@ export function FileWorkspace({
         });
     };
 
-
-
-
-    const title = selectedFiles.length > 0 ? "Sending files" : "Receiving files";
+    const title = (isSendingFile || sendingFilesRef.current.length > 0) ? "Sending files" : "Receiving files";
+    const hasRetryableFiles = !isSendingFile && sendingFilesRef.current.length > 0 && fileTransferProgress.some((file) => file.status === "failed");
     return (
         <>
         <View style={s.toolBlock}>
@@ -486,7 +491,9 @@ export function FileWorkspace({
             </Pressable>
             {fileTransferProgress.length > 0 && (
                 <View style={[s.transferTask, { borderColor: palette.border }]}>
-                    <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                        <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
+                    </View>
                     {fileTransferProgress.map((file) => {
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
                         return <View key={file.name} style={s.transferFile}>
@@ -504,9 +511,15 @@ export function FileWorkspace({
             )}
             <View style={s.footer}>
                 <Text style={{ color: palette.muted }}>{selectedFiles.length ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready` : "No files selected"}</Text>
-                <Pressable style={[s.primary, (!selectedFiles.length || isSendingFile) && s.disabled]} disabled={!selectedFiles.length || isSendingFile} onPress={() => { sendFiles(selectedFiles) }}>
-                    <Text style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text>
-                </Pressable>
+                {hasRetryableFiles ? (
+                    <Pressable style={s.primary} onPress={retryRemainingFiles}>
+                        <Text style={s.primaryText}>Retry remaining</Text>
+                    </Pressable>
+                ) : (
+                    <Pressable style={[s.primary, (!selectedFiles.length || isSendingFile) && s.disabled]} disabled={!selectedFiles.length || isSendingFile} onPress={() => { sendFiles(selectedFiles) }}>
+                        <Text style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text>
+                    </Pressable>
+                )}
             </View>
         </View>
         <Modal transparent visible={isReceiveDialogOpen} animationType="fade" onRequestClose={rejectFiles}>
