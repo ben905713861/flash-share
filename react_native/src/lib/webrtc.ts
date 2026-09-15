@@ -287,13 +287,15 @@ export const createWebRTC = ({
     };
 
     const createOffer = async (data: any) => {
-        console.log("createOffer, isOfferer=", data.isOfferer);
+        console.log("createOffer, isOfferer=", data.isOfferer, peer);
         if (!peer) {
             return;
         }
         if (!data.isOfferer) {
             return;
         }
+        console.log("createOffer, dataChannel={}, fileChannel={}, heartBeatChannel={}",
+            !!dataChannel, !!fileChannel, !!heartBeatChannel);
         if (dataChannel || fileChannel || heartBeatChannel) {
             restartPeerConnection();
         }
@@ -342,6 +344,11 @@ export const createWebRTC = ({
         }
     };
 
+    const isConnectionHealthy = (): boolean => {
+        console.log("iceConnectionState", peer?.iceConnectionState);
+        return peer?.iceConnectionState === "connected" || peer?.iceConnectionState === "completed";
+    };
+
     const dispose = () => {
         globalThis.clearTimeout(iceDisconnectTimer);
         globalThis.clearInterval(heartBeatInterval);
@@ -353,5 +360,15 @@ export const createWebRTC = ({
     };
 
     init();
-    return { createOffer, sdp, sdpAnswer, iceSwap, textChannelSend, fileChannelSend, fileChannelSendBytes, dispose };
+    return {
+        createOffer,
+        sdp,
+        sdpAnswer,
+        iceSwap,
+        textChannelSend,
+        fileChannelSend,
+        fileChannelSendBytes,
+        isConnectionHealthy,
+        dispose,
+    };
 };

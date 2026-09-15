@@ -115,6 +115,12 @@ export default function App() {
                 setPage("joinRoomWaitPage");
                 console.log("waiting", "Waiting for the paired device");
             } else if (type === "JOIN_ROOM_SUCC") {
+                if (webRTC && webRTC.isConnectionHealthy()) {
+                    console.log("connected, Keeping the existing peer connection");
+                    setPage("workPage");
+                    return;
+                }
+                console.log("webrtc not connected");
                 setPage("connectingPage");
                 webRTC?.dispose();
                 webRTC = webRTCRef.current = connectWebrtc();
