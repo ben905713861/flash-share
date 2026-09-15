@@ -476,7 +476,7 @@ export function FileWorkspace({
     };
 
     const title = (isSendingFile || sendingFilesRef.current.length > 0) ? "Sending files" : "Receiving files";
-    const hasRetryableFiles = !isSendingFile && sendingFilesRef.current.length > 0 && fileTransferProgress.some((file) => file.status === "failed");
+    const hasRetryableFiles = !isSendingFile && sendingFilesRef.current.length > 0 && fileTransferProgress.some((file) => file.status === "failed" || file.status === "declined");
     return (
         <>
         <View style={s.toolBlock}>
