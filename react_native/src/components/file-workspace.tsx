@@ -125,6 +125,11 @@ const formatBytes = (bytes: number) => {
     return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
+const fileTypeLabel = (filename: string) => {
+    const extension = filename.split(".").pop()?.trim().toUpperCase();
+    return extension && extension !== filename.toUpperCase() ? extension.slice(0, 4) : "FILE";
+};
+
 export function FileWorkspace({
                                   ref,
                                   palette,
@@ -495,20 +500,32 @@ export function FileWorkspace({
             </Pressable>
             {fileTransferProgress.length > 0 && (
                 <View style={[s.transferTask, { borderColor: palette.border }]}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                        <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
+                    <View style={s.transferHeader}>
+                        <View style={{ flex: 1, gap: 3 }}>
+                            <Text style={[s.transferTitle, { color: palette.text }]}>{title}</Text>
+                            <Text style={[s.transferCount, { color: palette.muted }]}>
+                                {fileTransferProgress.length} file{fileTransferProgress.length === 1 ? "" : "s"} · {formatBytes(fileTransferProgress.reduce((total, file) => total + file.size, 0))}
+                            </Text>
+                        </View>
                     </View>
-                    {fileTransferProgress.map((file) => {
+                    {fileTransferProgress.map((file, index) => {
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
-                        return <View key={file.name} style={s.transferFile}>
-                            <View style={s.transferSummary}>
-                                <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.name}</Text>
-                                <Text style={[s.transferStatus, transferStatusColors[file.status]]}>{transferStatusLabel[file.status]}</Text>
+                        return <View key={file.name} style={[s.transferFile, index < fileTransferProgress.length - 1 && { borderBottomWidth: 1, borderBottomColor: palette.border, paddingBottom: 12 }]}>
+                            <View style={s.transferFileRow}>
+                                <View style={[s.transferFileBadge, { backgroundColor: file.status === "failed" ? "#f9d9d7" : file.status === "completed" ? "#d9f2e3" : "#e7efff" }]}>
+                                    <Text style={[s.transferFileBadgeText, { color: file.status === "failed" ? "#a52a25" : file.status === "completed" ? "#187044" : "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
+                                </View>
+                                <View style={s.transferFileInfo}>
+                                    <View style={s.transferSummary}>
+                                        <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.name}</Text>
+                                        <Text style={[s.transferStatus, transferStatusColors[file.status]]}>{transferStatusLabel[file.status]}</Text>
+                                    </View>
+                                    <Text style={[s.transferMeta, { color: palette.muted }]}>
+                                        {file.status === "transferring" ? `${formatBytes(Math.max(0, file.transferred))} of ${formatBytes(file.size)} · ${Math.max(0, Math.min(percent, 100))}%` : formatBytes(file.size)}
+                                    </Text>
+                                </View>
                             </View>
-                            {(file.status === "transferring" || file.status === "completed") && <>
-                                {file.status === "transferring" && <View style={s.progressTrack}><View style={[s.progressValue, { width: `${Math.max(0, Math.min(percent, 100))}%` }]} /></View>}
-                                <Text style={{ color: palette.muted }}>{`${formatBytes(file.transferred)} of ${formatBytes(file.size)} (${percent}%)`}</Text>
-                            </>}
+                            {(file.status === "transferring" || file.status === "completed") && <View style={[s.progressTrack, { backgroundColor: palette.border }]}><View style={[s.progressValue, { width: `${Math.max(0, Math.min(percent, 100))}%`, backgroundColor: file.status === "completed" ? "#2f9e68" : "#2f6fed" }]} /></View>}
                         </View>;
                     })}
                 </View>
