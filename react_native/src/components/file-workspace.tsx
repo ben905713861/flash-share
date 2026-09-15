@@ -90,8 +90,8 @@ export function FileWorkspace({
     const sendingFilesRef = useRef<TransferFile[]>([]);
     const isInterruptFileSendingRef = useRef(false);
     const dirPickerRef = useRef<ReceiveDirectory | undefined>(undefined);
-    const writableRef = useRef<ReceiveFile | undefined>(undefined);
     const fileHandleRef = useRef<ReceiveFile | undefined>(undefined);
+    const isReceivingFileRef = useRef(false);
     const chunkIndexRef = useRef(0);
     const interruptFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
@@ -133,12 +133,14 @@ export function FileWorkspace({
                     return;
                 }
                 fileHandleRef.current = createReceiveFile(dirPickerRef.current, filename);
-                writableRef.current = fileHandleRef.current;
+                isReceivingFileRef.current = true;
                 chunkIndexRef.current = 0;
                 updateFileTransferProgress(filename, 0, "transferring");
                 fileChannelSend({ type: "file-start-ack", filename, size });
             } catch (e) {
                 console.error("file-start error", e);
+                fileHandleRef.current = undefined;
+                isReceivingFileRef.current = false;
                 updateFileTransferProgress(filename, 0, "failed");
                 fileChannelSend({ type: "file-start-reject", filename, size });
             }
@@ -167,10 +169,17 @@ export function FileWorkspace({
         } else if (type === "file-end") {
             const { filename, size } = payload;
             try {
-                const receivedSize = fileHandleRef.current && await getFileSize(fileHandleRef.current);
-                writableRef.current = undefined;
+                const fileHandle = fileHandleRef.current;
+                if (!isReceivingFileRef.current || !fileHandle) {
+                    isReceivingFileRef.current = false;
+                    fileHandleRef.current = undefined;
+                    fileChannelSend({ type: "file-end-reject", filename, size });
+                    return;
+                }
+                const receivedSize = await getFileSize(fileHandle);
+                isReceivingFileRef.current = false;
                 if (receivedSize === size) {
-                    await finalizeReceiveFile(fileHandleRef.current!);
+                    await finalizeReceiveFile(fileHandle);
                     updateFileTransferProgress(filename, size, "completed");
                     fileChannelSend({ type: "file-end-ack", filename, size });
                     console.log(`Received ${filename}`);
@@ -179,8 +188,11 @@ export function FileWorkspace({
                     fileChannelSend({ type: "file-end-reject", filename, size });
                     console.warn("file is damaged", filename);
                 }
+                fileHandleRef.current = undefined;
             } catch (e) {
                 console.error("exception occurs in file-end process.", e);
+                isReceivingFileRef.current = false;
+                fileHandleRef.current = undefined;
                 updateFileTransferProgress(filename, -1, "failed");
                 fileChannelSend({ type: "file-end-reject", filename, size });
             }
@@ -212,14 +224,15 @@ export function FileWorkspace({
     }
 
     const onFileChannelReceiveBytes = async (bytes: any) => {
-        if (!writableRef.current) {
+        const fileHandle = fileHandleRef.current;
+        if (!isReceivingFileRef.current || !fileHandle) {
             return;
         }
         try {
-            await appendFileChunk(writableRef.current, bytes);
+            await appendFileChunk(fileHandle, bytes);
             chunkIndexRef.current += 1;
             if (chunkIndexRef.current % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
-                updateFileTransferProgress(fileHandleRef.current!.name, chunkIndexRef.current * FILE_CHUNK_SIZE, "transferring");
+                updateFileTransferProgress(fileHandle.name, chunkIndexRef.current * FILE_CHUNK_SIZE, "transferring");
             }
             if (chunkIndexRef.current % FILE_CHUNK_WINDOW === 0) {
                 fileChannelSend({ type: "file-continue" });
@@ -229,15 +242,12 @@ export function FileWorkspace({
             debugger
             fileChannelSend({ type: "file-abort" });
             try {
-                if (fileHandleRef.current) {
-                    await deleteFile(fileHandleRef.current);
-                }
+                await deleteFile(fileHandle);
             } catch {
             }
-            writableRef.current = undefined;
-            if (fileHandleRef.current) {
-                updateFileTransferProgress(fileHandleRef.current.name, -1, "failed");
-            }
+            isReceivingFileRef.current = false;
+            fileHandleRef.current = undefined;
+            updateFileTransferProgress(fileHandle.name, -1, "failed");
         }
     }
 
@@ -325,6 +335,8 @@ export function FileWorkspace({
 
     const onFileChannelClose = () => {
         interruptFileSendingRef.current?.();
+        isReceivingFileRef.current = false;
+        fileHandleRef.current = undefined;
         setIsSendingFile(false);
         updateFileTransferStatus("failed");
     };
