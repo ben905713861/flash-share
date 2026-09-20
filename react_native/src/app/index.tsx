@@ -20,6 +20,9 @@ import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
 import { C, s } from "@/styles";
 import {File} from "expo-file-system";
 import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
+import { getReceiveDirectoryUri, pickReceiveDirectory } from "@/lib/file-transfer";
+import {isTauri} from "@/lib/tauri";
+import {pickTransferFiles} from "@/lib/file-transfer";
 
 
 const THEME_STORAGE_KEY = "flash-share-theme";
@@ -296,33 +299,7 @@ export default function App() {
                         </Text>
                         <Pressable onPress={
                             async () => {
-
-                                const pickerResult = await File.pickFileAsync({
-                                    multipleFiles: false,
-                                });
-
-                                if (pickerResult.canceled) {
-                                    return;
-                                }
-                                const sourceFile = pickerResult.result;
-
-                                console.log("source:", sourceFile.uri);
-
-                                const handler = await NativeFileReaderModule.open(sourceFile.uri)
-                                console.log(handler);
-                                try {
-                                    let bytes: Uint8Array | null;
-                                    while (true) {
-                                        bytes = await NativeFileReaderModule.read(handler, 512 * 1024);
-                                        if (bytes === null) {
-                                            break;
-                                        }
-                                        console.log("bytes", bytes.length);
-                                    }
-                                } finally {
-                                    await NativeFileReaderModule.close(handler);
-                                }
-                                console.log("end");
+                                console.log(pickTransferFiles())
                             }
                         }>
                             <Text>test</Text>
