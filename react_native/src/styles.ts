@@ -242,6 +242,12 @@ export const s = StyleSheet.create({
   themeSegmentText: { color: "#52606d", fontWeight: "600", fontSize: 14 },
   themeSegmentSelectedText: { color: "#fff" },
   settingsDivider: { height: 1, marginVertical: 4 },
+  settingsPath: { fontSize: 13 },
+  settingsPathActions: { flexDirection: "row", alignItems: "center", gap: 14 },
+  settingsPathButton: { minHeight: 40, borderWidth: 1, borderRadius: 8, justifyContent: "center", paddingHorizontal: 12 },
+  settingsPathButtonText: { fontWeight: "600" },
+  settingsClear: { minHeight: 40, justifyContent: "center", paddingHorizontal: 4 },
+  settingsClearText: { color: "#d9534f", fontWeight: "600" },
   settingsLogout: {
     minHeight: 44,
     alignItems: "flex-end",

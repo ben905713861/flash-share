@@ -33,7 +33,7 @@ type DirectoryPickerGlobal = typeof globalThis & {
 };
 
 export type ReceiveDirectory = {
-    handle?: WebDirectoryHandle;
+    handle: WebDirectoryHandle;
 };
 
 export type FileReader = {
@@ -71,12 +71,22 @@ export const pickReceiveDirectory = async (): Promise<ReceiveDirectory> => {
     return {handle};
 };
 
-export const createReceiveFile = (directory: ReceiveDirectory, filename: string): ReceiveFile => ({
-    name: filename,
-    chunks: [],
-    size: 0,
-    directory,
-});
+export const getReceiveDirectoryUri = (directory: ReceiveDirectory) => {
+    return "";
+};
+
+export const restoreReceiveDirectory = (uri: string): ReceiveDirectory => {
+    throw new Error("Restore directory was denied");
+};
+
+export const createReceiveFile = async (directory: ReceiveDirectory, filename: string): Promise<ReceiveFile> => {
+    return {
+        name: filename,
+        chunks: [],
+        size: 0,
+        directory,
+    };
+};
 
 export const appendFileChunk = (file: ReceiveFile, bytes: Uint8Array) => {
     file.chunks.push(bytes);

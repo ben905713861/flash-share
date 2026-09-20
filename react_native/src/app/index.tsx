@@ -18,10 +18,6 @@ import {FileWorkspace, FileWorkspaceRef} from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
 import { C, s } from "@/styles";
-import {File} from "expo-file-system";
-import NativeFileReaderModule from '@/../modules/native-file-reader/src/NativeFileReaderModule';
-import { getReceiveDirectoryUri, pickReceiveDirectory } from "@/lib/file-transfer";
-import {isTauri} from "@/lib/tauri";
 import {pickTransferFiles} from "@/lib/file-transfer";
 
 

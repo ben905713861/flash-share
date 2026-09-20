@@ -13,11 +13,13 @@ import {
     openFileForReading,
     pickReceiveDirectory,
     readFileChunk,
+    restoreReceiveDirectory,
     type ReceiveDirectory,
     type ReceiveFile,
     type TransferFile,
 } from "@/lib/file-transfer";
 import {showAlert} from "@/components/alert-modal";
+import storage from "@/lib/storage";
 
 const FILE_CHUNK_SIZE = 256 * 1024;
 const FILE_CHUNK_WINDOW = 16;
@@ -187,7 +189,7 @@ export function FileWorkspace({
                     fileChannelSend({ type: "file-start-reject", filename, size });
                     return;
                 }
-                fileHandleRef.current = createReceiveFile(dirPickerRef.current, filename);
+                fileHandleRef.current = await createReceiveFile(dirPickerRef.current, filename);
                 isReceivingFileRef.current = true;
                 chunkIndexRef.current = 0;
                 updateFileTransferProgress(filename, 0, "transferring");
@@ -240,7 +242,7 @@ export function FileWorkspace({
                 } else {
                     updateFileTransferProgress(filename, -1, "failed");
                     fileChannelSend({ type: "file-end-reject", filename, size });
-                    console.warn("file is damaged", filename);
+                    console.warn("file is damaged, receivedSize and original size is", filename, receivedSize, size);
                 }
                 fileHandleRef.current = undefined;
             } catch (e) {
@@ -376,8 +378,11 @@ export function FileWorkspace({
     };
 
     const acceptFiles = async () => {
+        const receiveDirectoryUri = storage.get("receive-directory");
         try {
-            dirPickerRef.current = await pickReceiveDirectory();
+            dirPickerRef.current = receiveDirectoryUri
+                ? restoreReceiveDirectory(receiveDirectoryUri)
+                : await pickReceiveDirectory();
             updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
             setReceiveDialogOpen(false);

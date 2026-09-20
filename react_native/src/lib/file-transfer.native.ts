@@ -24,7 +24,11 @@ export const closeFileReader = async (reader: FileReader) => {
 
 export const pickReceiveDirectory = () => Directory.pickDirectoryAsync();
 
-export const createReceiveFile = (directory: ReceiveDirectory, filename: string): ReceiveFile => {
+export const getReceiveDirectoryUri = (directory: ReceiveDirectory) => directory.uri;
+
+export const restoreReceiveDirectory = (uri: string): ReceiveDirectory => new Directory(uri);
+
+export const createReceiveFile = async (directory: ReceiveDirectory, filename: string): Promise<ReceiveFile> => {
     const existingFile = directory.list().find(file => {
         return file.name === filename;
     });
