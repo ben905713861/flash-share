@@ -4,7 +4,7 @@ import { s } from "@/styles";
 import {getReceiveDirectoryUri, pickReceiveDirectory} from "@/lib/file-transfer";
 import storage from "@/lib/storage";
 import {showAlert} from "@/components/alert-modal";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 
 type SettingsPalette = {
     card: string;
@@ -36,9 +36,15 @@ export function SettingsModal({
     onClose,
     onLogout,
 }: SettingsModalProps) {
-    const showReceiveDirectory = "__TAURI_INTERNALS__" in window;
+    const showReceiveDirectory = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-    const [receiveDirectoryUri, setReceiveDirectoryUri] = useState<string>();
+    const [receiveDirectoryUri, setReceiveDirectoryUri] = useState<string | undefined>(() => storage.get("receive-directory"));
+
+    useEffect(() => {
+        if (visible) {
+            setReceiveDirectoryUri(storage.get("receive-directory"));
+        }
+    }, [visible]);
 
     const onReceiveDirectorySelect = async () => {
         try {

@@ -1,34 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type TransferFile = File;
-
-export const pickTransferFiles = (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
-    return new Promise((resolve) => {
-        console.log("tauri");
-        resolve({canceled: false, result: []});
-    });
+export type TransferFile = {
+    name: string;
+    size: number;
+    path: string;
 };
 
-type WebDirectoryHandle = {
-    requestPermission: (options: {mode: "read" | "readwrite"}) => Promise<"granted" | "denied">;
-    getFileHandle: (name: string, options: {create: boolean}) => Promise<WebFileHandle>;
-};
-
-type WebFileHandle = {
-    createWritable: () => Promise<WebWritableFileStream>;
-};
-
-type WebWritableFileStream = {
-    write: (data: Blob) => Promise<void>;
-    close: () => Promise<void>;
-};
-
-type DirectoryPickerGlobal = typeof globalThis & {
-    showDirectoryPicker?: (options?: {mode?: "read" | "readwrite"}) => Promise<WebDirectoryHandle>;
+export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
+    const files = await invoke<TransferFile[] | null>("pick_transfer_files");
+    return files === null
+        ? {canceled: true, result: null}
+        : {canceled: false, result: files};
 };
 
 export type ReceiveDirectory = {
-    handle?: WebDirectoryHandle;
     path?: string;
 };
 
@@ -47,7 +32,11 @@ export type ReceiveFile = {
 export const openFileForReading = (file: TransferFile): FileReader => ({file, offset: 0});
 
 export const readFileChunk = async (reader: FileReader, size: number) => {
-    const bytes = new Uint8Array(await reader.file.slice(reader.offset, reader.offset + size).arrayBuffer());
+    const bytes = Uint8Array.from(await invoke<number[]>("read_transfer_file_chunk", {
+        path: reader.file.path,
+        offset: reader.offset,
+        size,
+    }));
     reader.offset += bytes.byteLength;
     return bytes;
 };

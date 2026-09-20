@@ -1,17 +1,29 @@
 use std::{
   collections::HashMap,
   fs::{File, OpenOptions},
-  io::Write,
+  io::{Read, Seek, SeekFrom, Write},
   path::PathBuf,
   sync::{Mutex, OnceLock},
 };
 
+use serde::Serialize;
+
 static RECEIVE_FILE_HANDLES: OnceLock<Mutex<HashMap<PathBuf, File>>> = OnceLock::new();
+const MAX_TRANSFER_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+
+#[derive(Serialize)]
+struct TransferFile {
+  name: String,
+  path: String,
+  size: u64,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
+      pick_transfer_files,
+      read_transfer_file_chunk,
       pick_receive_directory,
       open_receive_file,
       append_receive_file,
@@ -30,6 +42,49 @@ pub fn run() {
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
+}
+
+#[tauri::command]
+fn pick_transfer_files() -> Result<Option<Vec<TransferFile>>, String> {
+  let Some(paths) = rfd::FileDialog::new().pick_files() else {
+    return Ok(None);
+  };
+
+  paths
+    .into_iter()
+    .map(|path| {
+      let metadata = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+      let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Selected file has an invalid name".to_string())?;
+
+      Ok(TransferFile {
+        name: name.to_string(),
+        path: path.to_string_lossy().into_owned(),
+        size: metadata.len(),
+      })
+    })
+    .collect::<Result<Vec<_>, String>>()
+    .map(Some)
+}
+
+#[tauri::command]
+fn read_transfer_file_chunk(path: String, offset: u64, size: usize) -> Result<Vec<u8>, String> {
+  if size > MAX_TRANSFER_CHUNK_SIZE {
+    return Err("Requested file chunk is too large".to_string());
+  }
+
+  let mut file = File::open(path).map_err(|error| error.to_string())?;
+  file
+    .seek(SeekFrom::Start(offset))
+    .map_err(|error| error.to_string())?;
+
+  let mut bytes = Vec::with_capacity(size);
+  file.take(size as u64)
+    .read_to_end(&mut bytes)
+    .map_err(|error| error.to_string())?;
+  Ok(bytes)
 }
 
 #[tauri::command]
