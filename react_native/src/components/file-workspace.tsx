@@ -146,6 +146,7 @@ export function FileWorkspace({
     const dirPickerRef = useRef<ReceiveDirectory | undefined>(undefined);
     const fileHandleRef = useRef<ReceiveFile | undefined>(undefined);
     const isReceivingFileRef = useRef(false);
+    const totalChunksRef = useRef(0);
     const chunkIndexRef = useRef(0);
     const interruptFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
@@ -191,6 +192,7 @@ export function FileWorkspace({
                 }
                 fileHandleRef.current = await createReceiveFile(dirPickerRef.current, filename);
                 isReceivingFileRef.current = true;
+                totalChunksRef.current = Math.ceil(size / FILE_CHUNK_SIZE);
                 chunkIndexRef.current = 0;
                 updateFileTransferProgress(filename, 0, "transferring");
                 fileChannelSend({ type: "file-start-ack", filename, size });
@@ -289,7 +291,7 @@ export function FileWorkspace({
             if (chunkIndexRef.current % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
                 updateFileTransferProgress(fileHandle.name, chunkIndexRef.current * FILE_CHUNK_SIZE, "transferring");
             }
-            if (chunkIndexRef.current % FILE_CHUNK_WINDOW === 0) {
+            if (chunkIndexRef.current >= totalChunksRef.current || chunkIndexRef.current % FILE_CHUNK_WINDOW === 0) {
                 fileChannelSend({ type: "file-continue" });
             }
         } catch (e) {
@@ -330,7 +332,7 @@ export function FileWorkspace({
                 if (chunkIndex % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
                     updateFileTransferProgress(file.name, offset, "transferring");
                 }
-                if (chunkIndex % FILE_CHUNK_WINDOW === 0) {
+                if (offset >= file.size || chunkIndex % FILE_CHUNK_WINDOW === 0) {
                     await new Promise<void>((resolve, reject) => {
                         wakeupFileSendingRef.current = resolve;
                         interruptFileSendingRef.current = () => {
