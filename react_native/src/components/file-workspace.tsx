@@ -227,9 +227,12 @@ export function FileWorkspace({
         } else if (type === "file-continue") {
             wakeupFileSendingRef.current?.();
         } else if (type === "file-abort") {
+            // Protocol rule: only the receiving side sends file-abort after a
+            // write failure. The sender only interrupts its current file here;
+            // user-initiated cancellation always uses file-cancel.
             interruptFileSendingRef.current?.();
         } else if (type === "file-cancel") {
-            await fileAbort();
+            await cancelFileTransfer();
         } else if (type === "file-end") {
             const { filename, size } = payload;
             try {
@@ -310,35 +313,43 @@ export function FileWorkspace({
             }
         } catch (e) {
             console.error("failed to receive files", e);
-            await fileAbort();
-        }
-    }
-
-    const fileAbort = async () => {
-        if (isSendingFile) {
-            interruptFileSendingRef.current?.();
-            setIsSendingFile(false);
-            setIsFileTransferActive(false);
-            updateFileTransferStatus("failed");
-            fileChannelSend({ type: "file-cancel" });
-            return;
-        }
-
-        if (isReceivingFileRef.current) {
-            const fileHandle = fileHandleRef.current;
+            // A receive-side write failure is the only reason to send file-abort.
+            fileChannelSend({ type: "file-abort" });
+            try {
+                await deleteFile(fileHandle);
+            } catch {
+            }
             isReceivingFileRef.current = false;
             fileHandleRef.current = undefined;
+            setIsSendingFile(false);
             setIsFileTransferActive(false);
-            updateFileTransferStatus("failed");
-            fileChannelSend({ type: "file-abort" });
-            if (fileHandle) {
-                try {
-                    await deleteFile(fileHandle);
-                } catch {
-                }
-            }
+            updateFileTransferProgress(fileHandle.name, -1, "failed");
         }
     }
+
+    const cancelFileTransfer = async () => {
+        interruptFileSendingRef.current?.();
+        const fileHandle = fileHandleRef.current;
+        isReceivingFileRef.current = false;
+        fileHandleRef.current = undefined;
+        setIsSendingFile(false);
+        setIsFileTransferActive(false);
+        updateFileTransferStatus("failed");
+        if (fileHandle) {
+            try {
+                await deleteFile(fileHandle);
+            } catch {
+            }
+        }
+    };
+
+    const stopFileTransfer = async () => {
+        if (!isFileTransferActive) {
+            return;
+        }
+        fileChannelSend({ type: "file-cancel" });
+        await cancelFileTransfer();
+    };
 
     const sendSingleFile = async (file: TransferFile) => {
         isInterruptFileSendingRef.current = false;
@@ -584,7 +595,7 @@ export function FileWorkspace({
                         </Pressable>
                     )}
                     {isFileTransferActive &&
-                        <Pressable style={s.danger} onPress={fileAbort}>
+                        <Pressable style={s.danger} onPress={() => void stopFileTransfer()}>
                             <Text style={s.dangerText}>Stop</Text>
                         </Pressable>
                     }
