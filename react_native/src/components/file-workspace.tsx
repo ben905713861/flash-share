@@ -87,7 +87,7 @@ const parseFileRequest = (message: string): FileRequest | undefined => {
     }
     const payload = value as Record<string, unknown>;
     const type = payload.type as string;
-    const requestTypes = new Set(["file-request-ack", "file-request-reject", "file-continue", "file-abort"]);
+    const requestTypes = new Set(["file-request-ack", "file-request-reject", "file-continue", "file-abort", "file-cancel"]);
     if (requestTypes.has(type)) {
         return {type} as FileRequest;
     }
@@ -298,6 +298,9 @@ export function FileWorkspace({
         }
         try {
             await appendFileChunk(fileHandle, bytes);
+            if (!isReceivingFileRef.current || fileHandleRef.current !== fileHandle) {
+                return;
+            }
             chunkIndexRef.current += 1;
             if (chunkIndexRef.current % FILE_PROGRESS_CHUNK_INTERVAL === 0) {
                 updateFileTransferProgress(fileHandle.name, chunkIndexRef.current * FILE_CHUNK_SIZE, "transferring");
@@ -313,21 +316,27 @@ export function FileWorkspace({
 
     const fileAbort = async () => {
         if (isSendingFile) {
+            interruptFileSendingRef.current?.();
+            setIsSendingFile(false);
+            setIsFileTransferActive(false);
+            updateFileTransferStatus("failed");
             fileChannelSend({ type: "file-cancel" });
+            return;
         }
-        else if (isReceivingFileRef.current) {
+
+        if (isReceivingFileRef.current) {
             const fileHandle = fileHandleRef.current;
-            if (!fileHandle) {
-                return;
-            }
-            fileChannelSend({ type: "file-abort" });
-            try {
-                await deleteFile(fileHandle);
-            } catch {
-            }
             isReceivingFileRef.current = false;
             fileHandleRef.current = undefined;
-            updateFileTransferProgress(fileHandle.name, -1, "failed");
+            setIsFileTransferActive(false);
+            updateFileTransferStatus("failed");
+            fileChannelSend({ type: "file-abort" });
+            if (fileHandle) {
+                try {
+                    await deleteFile(fileHandle);
+                } catch {
+                }
+            }
         }
     }
 
