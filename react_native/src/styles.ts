@@ -121,6 +121,15 @@ export const s = StyleSheet.create({
     paddingHorizontal: 20,
   },
   secondaryText: { color: "#52606d", fontWeight: "700", fontSize: 16 },
+  danger: {
+    backgroundColor: "#c62828",
+    minHeight: 48,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  dangerText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   workspace: { marginTop: 20, gap: 14 },
   tabs: { flexDirection: "row", gap: 8 },
   tab: {
@@ -145,6 +154,12 @@ export const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginLeft: "auto",
   },
   filePicker: {
     minHeight: 130,

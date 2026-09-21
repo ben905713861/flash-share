@@ -548,9 +548,6 @@ export function FileWorkspace({
                                 {fileTransferProgress.length} file{fileTransferProgress.length === 1 ? "" : "s"} · {formatBytes(fileTransferProgress.reduce((total, file) => total + file.size, 0))}
                             </Text>
                         </View>
-                        {isFileTransferActive && <Pressable style={s.secondary} onPress={fileAbort}>
-                            <Text style={s.secondaryText}>Stop</Text>
-                        </Pressable>}
                     </View>
                     {fileTransferProgress.map((file, index) => {
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
@@ -576,15 +573,22 @@ export function FileWorkspace({
             )}
             <View style={s.footer}>
                 <Text style={{ color: palette.muted }}>{selectedFiles.length ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready` : "No files selected"}</Text>
-                {hasRetryableFiles ? (
-                    <Pressable style={s.primary} onPress={retryRemainingFiles}>
-                        <Text style={s.primaryText}>Retry remaining</Text>
-                    </Pressable>
-                ) : (
-                    <Pressable style={[s.primary, (!selectedFiles.length || isSendingFile) && s.disabled]} disabled={!selectedFiles.length || isSendingFile} onPress={() => { sendFiles(selectedFiles) }}>
-                        <Text style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text>
-                    </Pressable>
-                )}
+                <View style={s.footerActions}>
+                    {hasRetryableFiles ? (
+                        <Pressable style={s.primary} onPress={retryRemainingFiles}>
+                            <Text style={s.primaryText}>Retry remaining</Text>
+                        </Pressable>
+                    ) : (
+                        <Pressable style={[s.primary, (!selectedFiles.length || isSendingFile) && s.disabled]} disabled={!selectedFiles.length || isSendingFile} onPress={() => { sendFiles(selectedFiles) }}>
+                            <Text style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text>
+                        </Pressable>
+                    )}
+                    {isFileTransferActive &&
+                        <Pressable style={s.danger} onPress={fileAbort}>
+                            <Text style={s.dangerText}>Stop</Text>
+                        </Pressable>
+                    }
+                </View>
             </View>
         </View>
         <Modal transparent visible={isReceiveDialogOpen} animationType="fade" onRequestClose={rejectFiles}>
