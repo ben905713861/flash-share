@@ -50,7 +50,7 @@ type FileRequest = {
     type: "file-request";
     fileDetails: TransferFile[];
 } | {
-    type: "file-request-ack" | "file-request-reject" | "file-continue" | "file-abort";
+    type: "file-request-ack" | "file-request-reject" | "file-continue" | "file-abort" | "file-cancel";
 } | {
     type: "file-start" | "file-start-ack" | "file-start-reject" | "file-end" | "file-end-ack" | "file-end-reject";
     filename: string;
@@ -153,6 +153,7 @@ export function FileWorkspace({
     const [incomingFiles, setIncomingFiles] = useState<TransferFile[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
+    const [isFileTransferActive, setIsFileTransferActive] = useState(false);
 
 
     const onFileChannelReceiveText = async (message: string) => {
@@ -192,6 +193,7 @@ export function FileWorkspace({
                 }
                 fileHandleRef.current = await createReceiveFile(dirPickerRef.current, filename);
                 isReceivingFileRef.current = true;
+                setIsFileTransferActive(true);
                 totalChunksRef.current = Math.ceil(size / FILE_CHUNK_SIZE);
                 chunkIndexRef.current = 0;
                 updateFileTransferProgress(filename, 0, "transferring");
@@ -210,6 +212,7 @@ export function FileWorkspace({
                 return;
             }
             updateFileTransferProgress(filename, 0, "transferring");
+            setIsFileTransferActive(true);
             try {
                 console.log(`Sending ${filename}`);
                 await sendSingleFile(file);
@@ -217,6 +220,7 @@ export function FileWorkspace({
             } catch (e) {
                 console.warn("failed to send file, ", filename, e);
                 setIsSendingFile(false);
+                setIsFileTransferActive(false);
                 updateFileTransferProgress(filename, 0, "failed");
                 fileChannelSend({ type: "file-send-error", filename });
             }
@@ -224,6 +228,8 @@ export function FileWorkspace({
             wakeupFileSendingRef.current?.();
         } else if (type === "file-abort") {
             interruptFileSendingRef.current?.();
+        } else if (type === "file-cancel") {
+            await fileAbort();
         } else if (type === "file-end") {
             const { filename, size } = payload;
             try {
@@ -239,9 +245,11 @@ export function FileWorkspace({
                 if (receivedSize === size) {
                     await finalizeReceiveFile(fileHandle);
                     updateFileTransferProgress(filename, size, "completed");
+                    setIsFileTransferActive(false);
                     fileChannelSend({ type: "file-end-ack", filename, size });
                     console.log(`Received ${filename}`);
                 } else {
+                    setIsFileTransferActive(false);
                     updateFileTransferProgress(filename, -1, "failed");
                     fileChannelSend({ type: "file-end-reject", filename, size });
                     console.warn("file is damaged, receivedSize and original size is", filename, receivedSize, size);
@@ -251,6 +259,7 @@ export function FileWorkspace({
                 console.error("exception occurs in file-end process.", e);
                 isReceivingFileRef.current = false;
                 fileHandleRef.current = undefined;
+                setIsFileTransferActive(false);
                 updateFileTransferProgress(filename, -1, "failed");
                 fileChannelSend({ type: "file-end-reject", filename, size });
             }
@@ -261,6 +270,7 @@ export function FileWorkspace({
             // task completed
             if (sendingFilesRef.current.length === 0) {
                 setIsSendingFile(false);
+                setIsFileTransferActive(false);
                 clearSelectedFiles();
                 console.log("File transfer completed");
             } else {
@@ -276,6 +286,7 @@ export function FileWorkspace({
             const { filename } = payload;
             console.warn("file transferring", type, filename);
             setIsSendingFile(false);
+            setIsFileTransferActive(false);
             updateFileTransferProgress(filename, -1, "failed");
         }
     }
@@ -296,7 +307,19 @@ export function FileWorkspace({
             }
         } catch (e) {
             console.error("failed to receive files", e);
-            debugger
+            await fileAbort();
+        }
+    }
+
+    const fileAbort = async () => {
+        if (isSendingFile) {
+            fileChannelSend({ type: "file-cancel" });
+        }
+        else if (isReceivingFileRef.current) {
+            const fileHandle = fileHandleRef.current;
+            if (!fileHandle) {
+                return;
+            }
             fileChannelSend({ type: "file-abort" });
             try {
                 await deleteFile(fileHandle);
@@ -354,6 +377,7 @@ export function FileWorkspace({
             return;
         }
         setIsSendingFile(true);
+        setIsFileTransferActive(false);
         sendingFilesRef.current = [...files];
         const fileDetails: TransferFile[] = sendingFilesRef.current.map((file) => {
             return { name: file.name, size: file.size };
@@ -408,6 +432,7 @@ export function FileWorkspace({
         isReceivingFileRef.current = false;
         fileHandleRef.current = undefined;
         setIsSendingFile(false);
+        setIsFileTransferActive(false);
         updateFileTransferStatus("failed");
     };
 
@@ -514,6 +539,9 @@ export function FileWorkspace({
                                 {fileTransferProgress.length} file{fileTransferProgress.length === 1 ? "" : "s"} · {formatBytes(fileTransferProgress.reduce((total, file) => total + file.size, 0))}
                             </Text>
                         </View>
+                        {isFileTransferActive && <Pressable style={s.secondary} onPress={fileAbort}>
+                            <Text style={s.secondaryText}>Stop</Text>
+                        </Pressable>}
                     </View>
                     {fileTransferProgress.map((file, index) => {
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
