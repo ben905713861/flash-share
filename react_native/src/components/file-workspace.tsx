@@ -361,6 +361,7 @@ export function FileWorkspace({
     const sendSingleFile = async (file: TransferFile) => {
         console.log("sending single file", file);
         isInterruptFileSendingRef.current = false;
+        isErrorInterruptRef.current = false;
         interruptFileSendingRef.current = (isErrorInterrupt=true) => {
             isInterruptFileSendingRef.current = true;
             isErrorInterruptRef.current = isErrorInterrupt;
@@ -387,8 +388,9 @@ export function FileWorkspace({
                 if (offset >= file.size || chunkIndex % FILE_CHUNK_WINDOW === 0) {
                     await new Promise<void>((resolve, reject) => {
                         wakeupFileSendingRef.current = resolve;
-                        interruptFileSendingRef.current = () => {
+                        interruptFileSendingRef.current = (isErrorInterrupt=true) => {
                             isInterruptFileSendingRef.current = true;
+                            isErrorInterruptRef.current = isErrorInterrupt;
                             reject(new Error("File transfer aborted"));
                         };
                     });
