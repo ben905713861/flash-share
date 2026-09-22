@@ -34,7 +34,7 @@ type FileWorkspaceProps = {
 
 const transferStatusLabel: Record<FileTransferStatus, string> = {
     awaiting_approval: "Awaiting approval", queued: "Queued", transferring: "Transferring",
-    completed: "Completed", declined: "Declined", failed: "Failed",
+    completed: "Completed", declined: "Declined", cancelled: "Cancelled", failed: "Failed",
 };
 
 const transferStatusColors: Record<FileTransferStatus, { backgroundColor: string; color: string }> = {
@@ -43,6 +43,7 @@ const transferStatusColors: Record<FileTransferStatus, { backgroundColor: string
     transferring: { backgroundColor: "#d8e5ff", color: "#2456b8" },
     completed: { backgroundColor: "#d9f2e3", color: "#187044" },
     declined: { backgroundColor: "#fff0d9", color: "#9a5b00" },
+    cancelled: { backgroundColor: "#fff0d9", color: "#9a5b00" },
     failed: { backgroundColor: "#f9d9d7", color: "#a52a25" },
 };
 
@@ -65,7 +66,7 @@ type FileTransferProgress = {
     status: FileTransferStatus;
 } & TransferFile;
 
-type FileTransferStatus = "awaiting_approval" | "queued" | "transferring" | "completed" | "declined" | "failed";
+type FileTransferStatus = "awaiting_approval" | "queued" | "transferring" | "completed" | "declined" | "cancelled" | "failed";
 
 export interface FileWorkspaceRef {
     onFileChannelReceiveText: (message: string) => Promise<void>;
@@ -143,12 +144,13 @@ export function FileWorkspace({
     const wakeupFileSendingRef = useRef<(() => void) | undefined>(undefined);
     const sendingFilesRef = useRef<TransferFile[]>([]);
     const isInterruptFileSendingRef = useRef(false);
+    const isErrorInterruptRef = useRef(false);
     const dirPickerRef = useRef<ReceiveDirectory | undefined>(undefined);
     const fileHandleRef = useRef<ReceiveFile | undefined>(undefined);
     const isReceivingFileRef = useRef(false);
     const totalChunksRef = useRef(0);
     const chunkIndexRef = useRef(0);
-    const interruptFileSendingRef = useRef<(() => void) | undefined>(undefined);
+    const interruptFileSendingRef = useRef<((isErrorInterrupt?: boolean) => void) | undefined>(undefined);
     const [selectedFiles, setSelectedFiles] = useState<TransferFile[]>([]);
     const [incomingFiles, setIncomingFiles] = useState<TransferFile[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
@@ -218,11 +220,15 @@ export function FileWorkspace({
                 await sendSingleFile(file);
                 fileChannelSend({ type: "file-end", filename, size: file.size });
             } catch (e) {
-                console.warn("failed to send file, ", filename, e);
+                if (isErrorInterruptRef.current) {
+                    console.warn("failed to send file, ", filename, e);
+                    updateFileTransferProgress(filename, 0, "failed");
+                    fileChannelSend({ type: "file-send-error", filename });
+                } else {
+                    console.info("file transfer is stopped");
+                }
                 setIsSendingFile(false);
                 setIsFileTransferActive(false);
-                updateFileTransferProgress(filename, 0, "failed");
-                fileChannelSend({ type: "file-send-error", filename });
             }
         } else if (type === "file-continue") {
             wakeupFileSendingRef.current?.();
@@ -328,13 +334,14 @@ export function FileWorkspace({
     }
 
     const cancelFileTransfer = async () => {
-        interruptFileSendingRef.current?.();
-        const fileHandle = fileHandleRef.current;
+        console.log("Canceling file transfer", interruptFileSendingRef.current);
+        interruptFileSendingRef.current?.(false);
         isReceivingFileRef.current = false;
-        fileHandleRef.current = undefined;
         setIsSendingFile(false);
         setIsFileTransferActive(false);
-        updateFileTransferStatus("failed");
+        updateFileTransferStatus("cancelled");
+        const fileHandle = fileHandleRef.current;
+        fileHandleRef.current = undefined;
         if (fileHandle) {
             try {
                 await deleteFile(fileHandle);
@@ -352,9 +359,11 @@ export function FileWorkspace({
     };
 
     const sendSingleFile = async (file: TransferFile) => {
+        console.log("sending single file", file);
         isInterruptFileSendingRef.current = false;
-        interruptFileSendingRef.current = () => {
+        interruptFileSendingRef.current = (isErrorInterrupt=true) => {
             isInterruptFileSendingRef.current = true;
+            isErrorInterruptRef.current = isErrorInterrupt;
         };
         // File.slice() creates a Blob from a Uint8Array in Expo SDK 57, but
         // React Native's Blob implementation does not support that input.
@@ -387,6 +396,7 @@ export function FileWorkspace({
             }
         } finally {
             closeFileReader(readHandle);
+            interruptFileSendingRef.current = undefined;
         }
     };
 
@@ -538,7 +548,10 @@ export function FileWorkspace({
     };
 
     const title = (isSendingFile || sendingFilesRef.current.length > 0) ? "Sending files" : "Receiving files";
-    const hasRetryableFiles = !isSendingFile && sendingFilesRef.current.length > 0 && fileTransferProgress.some((file) => file.status === "failed" || file.status === "declined");
+    const hasRetryableFiles = !isSendingFile
+        && sendingFilesRef.current.length > 0
+        && fileTransferProgress.some((file) =>
+            file.status === "failed" || file.status === "declined" || file.status === "cancelled");
     return (
         <>
         <View style={s.toolBlock}>
@@ -564,8 +577,8 @@ export function FileWorkspace({
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
                         return <View key={file.name} style={[s.transferFile, index < fileTransferProgress.length - 1 && { borderBottomWidth: 1, borderBottomColor: palette.border, paddingBottom: 12 }]}>
                             <View style={s.transferFileRow}>
-                                <View style={[s.transferFileBadge, { backgroundColor: file.status === "failed" ? "#f9d9d7" : file.status === "completed" ? "#d9f2e3" : "#e7efff" }]}>
-                                    <Text style={[s.transferFileBadgeText, { color: file.status === "failed" ? "#a52a25" : file.status === "completed" ? "#187044" : "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
+                                <View style={[s.transferFileBadge, { backgroundColor: file.status === "failed" ? "#f9d9d7" : file.status === "completed" ? "#d9f2e3" : file.status === "cancelled" || file.status === "declined" ? "#fff0d9" : "#e7efff" }]}>
+                                    <Text style={[s.transferFileBadgeText, { color: file.status === "failed" ? "#a52a25" : file.status === "completed" ? "#187044" : file.status === "cancelled" || file.status === "declined" ? "#9a5b00" : "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
                                 </View>
                                 <View style={s.transferFileInfo}>
                                     <View style={s.transferSummary}>
