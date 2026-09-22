@@ -557,22 +557,33 @@ export function FileWorkspace({
                 onFilesSelected={applySelectedFiles}
             >
                 <View style={[s.filePickerInner, { borderColor: "rgba(145, 155, 168, 0.58)" }]}>
-                    <View style={s.filePickerMain}>
-                        <View style={s.filePickerInfo}>
-                            <Text numberOfLines={1} style={[s.filePickerTitle, { color: palette.text }]}>
-                                {selectedFiles.length
-                                    ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} ready to share`
-                                    : "Add files to share"}
-                            </Text>
-                            <Text numberOfLines={1} style={[s.filePickerHint, { color: palette.muted }]}>
-                                {selectedFiles.length
-                                    ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} selected`
-                                    : "Files stay on your device until you send them"}
-                            </Text>
-                        </View>
-                    </View>
-                    {!selectedFiles.length && (
-                        <Text style={[s.filePickerDropHint, { color: palette.muted }]}>Drop files anywhere in this area</Text>
+                    {selectedFiles.length ? (
+                        <>
+                            <Text style={[s.filePickerTitle, { color: palette.text }]}>Files ready to share</Text>
+                            <View style={s.filePickerFileList}>
+                                {selectedFiles.map((file) => (
+                                    <View style={s.filePickerFile} key={file.name}>
+                                        <View style={[s.filePickerFileBadge, { backgroundColor: "#e7efff" }]}>
+                                            <Text style={[s.filePickerFileBadgeText, { color: "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
+                                        </View>
+                                        <View style={s.filePickerFileInfo}>
+                                            <Text numberOfLines={1} style={[s.filePickerFileName, { color: palette.text }]}>{file.name}</Text>
+                                            <Text style={[s.filePickerFileSize, { color: palette.muted }]}>{formatBytes(file.size)}</Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </>
+                    ) : (
+                        <>
+                            <View style={s.filePickerMain}>
+                                <View style={s.filePickerInfo}>
+                                    <Text style={[s.filePickerTitle, { color: palette.text }]}>Add files to share</Text>
+                                    <Text numberOfLines={1} style={[s.filePickerHint, { color: palette.muted }]}>Files stay on your device until you send them</Text>
+                                </View>
+                            </View>
+                            <Text style={[s.filePickerDropHint, { color: palette.muted }]}>Drop files anywhere in this area</Text>
+                        </>
                     )}
                 </View>
             </FileDropZone>
