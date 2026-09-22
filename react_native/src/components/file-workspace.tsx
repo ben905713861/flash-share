@@ -551,17 +551,30 @@ export function FileWorkspace({
         <>
         <View style={s.toolBlock}>
             <FileDropZone
-                style={[s.filePicker, { borderColor: palette.border }, isSendingFile && s.disabled]}
-                activeStyle={{ borderColor: "#2f6fed", backgroundColor: "#eef4ff" }}
+                style={[s.filePicker, { borderColor: palette.border, backgroundColor: palette.card }, isSendingFile && s.disabled]}
+                activeStyle={{ backgroundColor: "#f4f4f5" }}
                 disabled={isSendingFile}
                 onFilesSelected={applySelectedFiles}
             >
-                <Text style={[s.filePickerTitle, { color: palette.text }]}>
-                    {selectedFiles.length ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected` : "Choose files to share"}
-                </Text>
-                <Text style={{ color: palette.muted }}>
-                    {selectedFiles.length ? selectedFiles.map((file) => `${file.name} (${formatBytes(file.size)})`).join(" · ") : "Any file type. The other device chooses where to save it."}
-                </Text>
+                <View style={[s.filePickerInner, { borderColor: "rgba(145, 155, 168, 0.58)" }]}>
+                    <View style={s.filePickerMain}>
+                        <View style={s.filePickerInfo}>
+                            <Text numberOfLines={1} style={[s.filePickerTitle, { color: palette.text }]}>
+                                {selectedFiles.length
+                                    ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} ready to share`
+                                    : "Add files to share"}
+                            </Text>
+                            <Text numberOfLines={1} style={[s.filePickerHint, { color: palette.muted }]}>
+                                {selectedFiles.length
+                                    ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} selected`
+                                    : "Files stay on your device until you send them"}
+                            </Text>
+                        </View>
+                    </View>
+                    {!selectedFiles.length && (
+                        <Text style={[s.filePickerDropHint, { color: palette.muted }]}>Drop files anywhere in this area</Text>
+                    )}
+                </View>
             </FileDropZone>
             {fileTransferProgress.length > 0 && (
                 <View style={[s.transferTask, { borderColor: palette.border }]}>
