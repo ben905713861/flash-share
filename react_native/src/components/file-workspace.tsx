@@ -3,7 +3,6 @@ import { C, s } from "@/styles";
 import React, {useImperativeHandle, useRef, useState} from "react";
 
 import {
-    pickTransferFiles,
     appendFileChunk,
     closeFileReader,
     createReceiveFile,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/file-transfer";
 import {showAlert} from "@/components/alert-modal";
 import storage from "@/lib/storage";
+import {FileDropZone} from "@/components/file-drop-zone";
 
 const FILE_CHUNK_SIZE = 256 * 1024;
 const FILE_CHUNK_WINDOW = 16;
@@ -485,19 +485,12 @@ export function FileWorkspace({
         return false;
     };
 
-    const onFilesSelected = async () => {
-        if (isSendingFile) {
-            return;
-        }
-        const result = await pickTransferFiles();
-        if (result.canceled) {
-            return;
-        }
-        if (hasDuplicateFilenames(result.result)) {
+    const applySelectedFiles = (files: TransferFile[]) => {
+        if (hasDuplicateFilenames(files)) {
             setSelectedFiles([]);
             showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
         } else {
-            setSelectedFiles(result.result);
+            setSelectedFiles(files);
         }
         sendingFilesRef.current = [];
         setFileTransferProgress([]);
@@ -557,14 +550,19 @@ export function FileWorkspace({
     return (
         <>
         <View style={s.toolBlock}>
-            <Pressable style={[s.filePicker, { borderColor: palette.border }]} disabled={isSendingFile} onPress={onFilesSelected}>
+            <FileDropZone
+                style={[s.filePicker, { borderColor: palette.border }, isSendingFile && s.disabled]}
+                activeStyle={{ borderColor: "#2f6fed", backgroundColor: "#eef4ff" }}
+                disabled={isSendingFile}
+                onFilesSelected={applySelectedFiles}
+            >
                 <Text style={[s.filePickerTitle, { color: palette.text }]}>
                     {selectedFiles.length ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected` : "Choose files to share"}
                 </Text>
                 <Text style={{ color: palette.muted }}>
                     {selectedFiles.length ? selectedFiles.map((file) => `${file.name} (${formatBytes(file.size)})`).join(" · ") : "Any file type. The other device chooses where to save it."}
                 </Text>
-            </Pressable>
+            </FileDropZone>
             {fileTransferProgress.length > 0 && (
                 <View style={[s.transferTask, { borderColor: palette.border }]}>
                     <View style={s.transferHeader}>
