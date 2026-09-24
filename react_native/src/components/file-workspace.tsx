@@ -1,10 +1,12 @@
 import { Modal, Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { C, s } from "@/styles";
 import React, {useImperativeHandle, useRef, useState} from "react";
 
 import {
     appendFileChunk,
     closeFileReader,
+    createTransferFilePreviewUri,
     createReceiveFile,
     deleteFile,
     finalizeReceiveFile,
@@ -12,6 +14,7 @@ import {
     openFileForReading,
     pickReceiveDirectory,
     readFileChunk,
+    releaseTransferFilePreviewUri,
     restoreReceiveDirectory,
     type ReceiveDirectory,
     type ReceiveFile,
@@ -485,11 +488,21 @@ export function FileWorkspace({
         return false;
     };
 
+    const isImageFile = (file: TransferFile) => {
+        const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
+        return mimeType.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
+    };
+
     const applySelectedFiles = (files: TransferFile[]) => {
         if (hasDuplicateFilenames(files)) {
             setSelectedFiles([]);
             showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
         } else {
+            files.forEach(file => {
+                if (isImageFile(file)) {
+                    file.thumb = createTransferFilePreviewUri(file);
+                }
+            })
             setSelectedFiles(files);
         }
         sendingFilesRef.current = [];
@@ -498,6 +511,18 @@ export function FileWorkspace({
 
     const clearSelectedFiles = () => {
         setSelectedFiles([]);
+    };
+
+    const removeSelectedFile = (filename: string) => {
+        setSelectedFiles((files) => {
+            const newFiles = files.filter((file) => file.name !== filename);
+            newFiles.forEach(file => {
+                if (file.thumb) {
+                    releaseTransferFilePreviewUri(file.thumb);
+                }
+            });
+            return newFiles;
+        });
     };
 
     const fileRequestComes = (fileDetails: TransferFile[]) => {
@@ -563,13 +588,34 @@ export function FileWorkspace({
                             <View style={s.filePickerFileList}>
                                 {selectedFiles.map((file) => (
                                     <View style={s.filePickerFile} key={file.name}>
-                                        <View style={[s.filePickerFileBadge, { backgroundColor: "#e7efff" }]}>
-                                            <Text style={[s.filePickerFileBadgeText, { color: "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
-                                        </View>
+                                        {file.thumb ? (
+                                            <Image
+                                                source={{ uri: file.thumb }}
+                                                style={s.filePickerFileThumbnail}
+                                                contentFit="cover"
+                                                transition={120}
+                                            />
+                                        ) : (
+                                            <View style={[s.filePickerFileBadge, { backgroundColor: "#e7efff" }]}>
+                                                <Text style={[s.filePickerFileBadgeText, { color: "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
+                                            </View>
+                                        )}
                                         <View style={s.filePickerFileInfo}>
                                             <Text numberOfLines={1} style={[s.filePickerFileName, { color: palette.text }]}>{file.name}</Text>
                                             <Text style={[s.filePickerFileSize, { color: palette.muted }]}>{formatBytes(file.size)}</Text>
                                         </View>
+                                        <Pressable
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Remove ${file.name}`}
+                                            hitSlop={8}
+                                            onPress={(event) => {
+                                                event.stopPropagation();
+                                                removeSelectedFile(file.name);
+                                            }}
+                                            style={({ pressed }) => [s.filePickerRemove, pressed && s.filePickerRemovePressed]}
+                                        >
+                                            <Text style={s.filePickerRemoveText}>×</Text>
+                                        </Pressable>
                                     </View>
                                 ))}
                             </View>

@@ -1,5 +1,9 @@
 export type TransferFile = File;
 
+export const createTransferFilePreviewUri = (file: TransferFile) => URL.createObjectURL(file);
+
+export const releaseTransferFilePreviewUri = (uri: string) => URL.revokeObjectURL(uri);
+
 export const pickTransferFiles = (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     return new Promise((resolve) => {
         const input = document.createElement("input");

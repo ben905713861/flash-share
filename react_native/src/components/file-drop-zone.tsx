@@ -12,9 +12,11 @@ export type FileDropZoneProps = {
 export function FileDropZone({children, style, disabled, onFilesSelected}: FileDropZoneProps) {
     const selectFiles = async () => {
         const result = await pickTransferFiles();
-        if (!result.canceled) {
-            onFilesSelected(result.result);
+        if (result.canceled) {
+            return;
         }
+        const acceptedFiles: TransferFile[] = result.result;
+        onFilesSelected(acceptedFiles);
     };
 
     return <Pressable style={style} disabled={disabled} onPress={() => void selectFiles()}>{children}</Pressable>;

@@ -1,6 +1,7 @@
 export type TransferFile = {
     name: string;
     size: number;
+    thumb?: string;
 };
 
 export type ReceiveDirectory = unknown;
@@ -13,6 +14,8 @@ export type FilePickerResult =
     | {canceled: true; result: null};
 
 export declare const pickTransferFiles: () => Promise<FilePickerResult>;
+export declare const createTransferFilePreviewUri: (file: TransferFile) => string;
+export declare const releaseTransferFilePreviewUri: (uri: string) => void;
 export declare const openFileForReading: (file: TransferFile) => Promise<FileReader>;
 export declare const readFileChunk: (reader: FileReader, size: number) => Uint8Array | Promise<Uint8Array>;
 export declare const closeFileReader: (reader: FileReader) => void;

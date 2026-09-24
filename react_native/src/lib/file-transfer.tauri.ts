@@ -1,10 +1,14 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type TransferFile = {
     name: string;
     size: number;
     path: string;
 };
+
+export const createTransferFilePreviewUri = (file: TransferFile) => convertFileSrc(file.path);
+
+export const releaseTransferFilePreviewUri = (_uri: string) => undefined;
 
 export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     const files = await invoke<TransferFile[] | null>("pick_transfer_files");

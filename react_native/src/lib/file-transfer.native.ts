@@ -6,6 +6,10 @@ export type ReceiveDirectory = Directory;
 export type ReceiveFile = File;
 export type FileReader = string;
 
+export const createTransferFilePreviewUri = (file: TransferFile) => file.uri;
+
+export const releaseTransferFilePreviewUri = (_uri: string) => undefined;
+
 export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     return File.pickFileAsync({multipleFiles: true});
 };
