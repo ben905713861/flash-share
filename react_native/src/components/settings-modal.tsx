@@ -1,4 +1,4 @@
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Platform, Pressable, Text, View } from "react-native";
 import type { ThemePreference } from "@/lib/theme";
 import { s } from "@/styles";
 import {getReceiveDirectoryUri, pickReceiveDirectory} from "@/lib/file-transfer";
@@ -36,7 +36,8 @@ export function SettingsModal({
     onClose,
     onLogout,
 }: SettingsModalProps) {
-    const showReceiveDirectory = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+    const showReceiveDirectory =
+        Platform.OS !== "web" || (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window);
 
     const [receiveDirectoryUri, setReceiveDirectoryUri] = useState<string | undefined>(() => storage.get("receive-directory"));
 
