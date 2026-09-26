@@ -489,21 +489,18 @@ export function FileWorkspace({
         return false;
     };
 
-    const isImageFile = (file: TransferFile) => {
-        const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
-        return mimeType.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
-    };
-
-    const applySelectedFiles = (files: TransferFile[]) => {
+    const applySelectedFiles = async (files: TransferFile[]) => {
         if (hasDuplicateFilenames(files)) {
             setSelectedFiles([]);
             showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
         } else {
-            files.forEach(file => {
-                if (isImageFile(file)) {
-                    file.thumb = createTransferFilePreviewUri(file);
+            await Promise.all(files.map(async (file) => {
+                try {
+                    file.thumb = await createTransferFilePreviewUri(file);
+                } catch (error) {
+                    console.warn("Unable to create file preview", file.name, error);
                 }
-            })
+            }));
             setSelectedFiles(files);
         }
         sendingFilesRef.current = [];

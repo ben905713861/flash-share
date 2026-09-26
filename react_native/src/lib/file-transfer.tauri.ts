@@ -2,9 +2,13 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type TransferFile = File;
 
-export const createTransferFilePreviewUri = (file: TransferFile) => URL.createObjectURL(file);
+export const createTransferFilePreviewUri = async (file: TransferFile) => {
+    return URL.createObjectURL(file);
+}
 
-export const releaseTransferFilePreviewUri = (uri: string) => URL.revokeObjectURL(uri);
+export const releaseTransferFilePreviewUri = (uri: string) => {
+    URL.revokeObjectURL(uri);
+}
 
 export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     throw new Error("pickTransferFiles in web model is not supported");

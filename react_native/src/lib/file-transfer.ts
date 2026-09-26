@@ -13,8 +13,18 @@ export type FilePickerResult =
     | {canceled: false; result: TransferFile[]}
     | {canceled: true; result: null};
 
+export const isImageFile = (file: TransferFile) => {
+    const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
+    return mimeType.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
+};
+
+export const isVideoFile = (file: TransferFile) => {
+    const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
+    return mimeType.startsWith("video/") || /\.(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|webm|wmv)$/i.test(file.name);
+};
+
 export declare const pickTransferFiles: () => Promise<FilePickerResult>;
-export declare const createTransferFilePreviewUri: (file: TransferFile) => string;
+export declare const createTransferFilePreviewUri: (file: TransferFile) => Promise<string>;
 export declare const releaseTransferFilePreviewUri: (uri: string) => void;
 export declare const openFileForReading: (file: TransferFile) => Promise<FileReader>;
 export declare const readFileChunk: (reader: FileReader, size: number) => Uint8Array | Promise<Uint8Array>;
