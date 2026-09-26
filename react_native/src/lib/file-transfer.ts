@@ -13,25 +13,22 @@ export type FilePickerResult =
     | {canceled: false; result: TransferFile[]}
     | {canceled: true; result: null};
 
-export const isImageFile = (file: TransferFile) => {
-    const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
-    return mimeType.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
-};
-
-export const isVideoFile = (file: TransferFile) => {
-    const mimeType = "type" in file && typeof file.type === "string" ? file.type : "";
-    return mimeType.startsWith("video/") || /\.(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|webm|wmv)$/i.test(file.name);
-};
-
+// upload files
 export declare const pickTransferFiles: () => Promise<FilePickerResult>;
-export declare const createTransferFilePreviewUri: (file: TransferFile) => Promise<string>;
-export declare const releaseTransferFilePreviewUri: (uri: string) => void;
 export declare const openFileForReading: (file: TransferFile) => Promise<FileReader>;
 export declare const readFileChunk: (reader: FileReader, size: number) => Uint8Array | Promise<Uint8Array>;
 export declare const closeFileReader: (reader: FileReader) => void;
-export declare const pickReceiveDirectory: () => Promise<ReceiveDirectory>;
+
+// thumb
+export declare const createTransferFilePreviewUri: (file: TransferFile) => Promise<string>;
+export declare const releaseTransferFilePreviewUri: (uri: string) => void;
+
+// setting model
 export declare const getReceiveDirectoryUri: (directory: ReceiveDirectory) => string;
 export declare const restoreReceiveDirectory: (uri: string) => ReceiveDirectory;
+
+// download files
+export declare const pickReceiveDirectory: () => Promise<ReceiveDirectory>;
 export declare const createReceiveFile: (directory: ReceiveDirectory, filename: string) => Promise<ReceiveFile>;
 export declare const appendFileChunk: (file: ReceiveFile, bytes: Uint8Array) => void | Promise<void>;
 export declare const getFileSize: (file: ReceiveFile) => number | Promise<number>;

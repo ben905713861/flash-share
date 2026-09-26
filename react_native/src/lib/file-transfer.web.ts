@@ -1,4 +1,3 @@
-export type TransferFile = File;
 
 const isImageFile = (file: TransferFile) => {
     return file.type.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
@@ -14,7 +13,9 @@ export type FileReader = {
     offset: number;
 };
 
-export const pickTransferFiles = (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
+export type TransferFile = File;
+
+export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
     throw new Error("pickTransferFiles in web model is not supported");
 };
 
@@ -95,32 +96,13 @@ export const releaseTransferFilePreviewUri = (uri: string) => {
 };
 
 
-
-
-
-type WebWritableFileStream = {
-    write: (data: Blob) => Promise<void>;
-    close: () => Promise<void>;
-};
-
-type WebFileHandle = {
-    createWritable: () => Promise<WebWritableFileStream>;
-};
-
-type WebDirectoryHandle = {
-    requestPermission: (options: {mode: "read" | "readwrite"}) => Promise<"granted" | "denied">;
-    getFileHandle: (name: string, options: {create: boolean}) => Promise<WebFileHandle>;
-};
-
-
-
-
-
-
-
 // setting model
 export type ReceiveDirectory = {
-    handle: WebDirectoryHandle;
+    handle: FileSystemDirectoryHandle;
+};
+
+type PermissionAwareDirectoryHandle = FileSystemDirectoryHandle & {
+    requestPermission(options: {mode: "read" | "readwrite"}): Promise<"granted" | "denied" | "prompt">;
 };
 
 export const getReceiveDirectoryUri = (directory: ReceiveDirectory) => {
@@ -133,10 +115,10 @@ export const restoreReceiveDirectory = (uri: string): ReceiveDirectory => {
 
 // download files
 type DirectoryPickerGlobal = typeof globalThis & {
-    showDirectoryPicker?: (options?: {mode?: "read" | "readwrite"}) => Promise<WebDirectoryHandle>;
+    showDirectoryPicker?: (options?: {mode?: "read" | "readwrite"}) => Promise<FileSystemDirectoryHandle>;
 };
 
-type ReceiveFile = {
+export type ReceiveFile = {
     name: string;
     chunks: Uint8Array[];
     size: number;
@@ -149,7 +131,7 @@ export const pickReceiveDirectory = async (): Promise<ReceiveDirectory> => {
         throw new Error("Directory access is not supported in this browser");
     }
     const handle = await picker({mode: "readwrite"});
-    const permission = await handle.requestPermission({mode: "readwrite"});
+    const permission = await (handle as PermissionAwareDirectoryHandle).requestPermission({mode: "readwrite"});
     if (permission !== "granted") {
         throw new Error("Write permission for the receive directory was denied");
     }
@@ -170,7 +152,9 @@ export const appendFileChunk = (file: ReceiveFile, bytes: Uint8Array) => {
     file.size += bytes.byteLength;
 };
 
-export const getFileSize = (file: ReceiveFile) => file.size;
+export const getFileSize = (file: ReceiveFile) => {
+    return file.size;
+};
 
 export const finalizeReceiveFile = async (file: ReceiveFile) => {
     const blob = new Blob(file.chunks.map((chunk) => Uint8Array.from(chunk)));
