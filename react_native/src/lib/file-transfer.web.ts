@@ -1,6 +1,12 @@
-import {isImageFile, isVideoFile} from "@/lib/file-transfer";
-
 export type TransferFile = File;
+
+const isImageFile = (file: TransferFile) => {
+    return file.type.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
+};
+
+const isVideoFile = (file: TransferFile) => {
+    return file.type.startsWith("video/") || /\.(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|webm|wmv)$/i.test(file.name);
+};
 
 // upload files
 export type FileReader = {
@@ -59,14 +65,17 @@ export const createTransferFilePreviewUri = async (file: TransferFile) => {
                     reject(new Error("Unable to decode video frame"));
                     return;
                 }
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        resolve(URL.createObjectURL(blob));
-                    } else {
-                        reject(new Error("Unable to encode video preview"));
-                    }
-                }, "image/jpeg", 0.85);
+                setTimeout(() => {
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(URL.createObjectURL(blob));
+                        } else {
+                            reject(new Error("Unable to encode video preview"));
+                        }
+                    }, "image/jpeg", 0.85);
+                }, 1);
+
             };
             video.onloadedmetadata = () => {
                 video.currentTime = video.duration > 0 ? Math.min(0.1, video.duration) : 0;
