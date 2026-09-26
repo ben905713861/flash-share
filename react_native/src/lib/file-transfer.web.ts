@@ -5,17 +5,7 @@ export const createTransferFilePreviewUri = (file: TransferFile) => URL.createOb
 export const releaseTransferFilePreviewUri = (uri: string) => URL.revokeObjectURL(uri);
 
 export const pickTransferFiles = (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
-    return new Promise((resolve) => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.multiple = true;
-        input.onchange = () => {
-            resolve(input.files
-                ? {canceled: false, result: Array.from(input.files)}
-                : {canceled: true, result: null});
-        };
-        input.click();
-    });
+    throw new Error("pickTransferFiles in web model is not supported");
 };
 
 type WebDirectoryHandle = {

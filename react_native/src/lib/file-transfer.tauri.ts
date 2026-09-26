@@ -1,20 +1,13 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
-export type TransferFile = {
-    name: string;
-    size: number;
-    path: string;
-};
+export type TransferFile = File;
 
-export const createTransferFilePreviewUri = (file: TransferFile) => convertFileSrc(file.path);
+export const createTransferFilePreviewUri = (file: TransferFile) => URL.createObjectURL(file);
 
-export const releaseTransferFilePreviewUri = (_uri: string) => undefined;
+export const releaseTransferFilePreviewUri = (uri: string) => URL.revokeObjectURL(uri);
 
 export const pickTransferFiles = async (): Promise<{canceled: false; result: TransferFile[]} | {canceled: true; result: null}> => {
-    const files = await invoke<TransferFile[] | null>("pick_transfer_files");
-    return files === null
-        ? {canceled: true, result: null}
-        : {canceled: false, result: files};
+    throw new Error("pickTransferFiles in web model is not supported");
 };
 
 export type ReceiveDirectory = {
@@ -36,11 +29,7 @@ export type ReceiveFile = {
 export const openFileForReading = (file: TransferFile): FileReader => ({file, offset: 0});
 
 export const readFileChunk = async (reader: FileReader, size: number) => {
-    const bytes = Uint8Array.from(await invoke<number[]>("read_transfer_file_chunk", {
-        path: reader.file.path,
-        offset: reader.offset,
-        size,
-    }));
+    const bytes = new Uint8Array(await reader.file.slice(reader.offset, reader.offset + size).arrayBuffer());
     reader.offset += bytes.byteLength;
     return bytes;
 };

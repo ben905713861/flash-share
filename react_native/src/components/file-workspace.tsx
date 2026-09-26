@@ -223,6 +223,7 @@ export function FileWorkspace({
                 await sendSingleFile(file);
                 fileChannelSend({ type: "file-end", filename, size: file.size });
             } catch (e) {
+                console.error(e);
                 if (isErrorInterruptRef.current) {
                     console.warn("failed to send file, ", filename, e);
                     updateFileTransferProgress(filename, 0, "failed");
