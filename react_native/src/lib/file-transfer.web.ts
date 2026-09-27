@@ -91,6 +91,10 @@ export const createTransferFilePreviewUri = async (file: TransferFile) => {
     return null;
 };
 
+export const createReceiveFilePreviewUri = async (file: ReceiveFile) => {
+    return createTransferFilePreviewUri(await file.handle.getFile());
+};
+
 export const releaseTransferFilePreviewUri = (uri: string) => {
     URL.revokeObjectURL(uri);
 };
@@ -122,6 +126,7 @@ export type ReceiveFile = {
     name: string;
     size: number;
     directory: ReceiveDirectory;
+    handle: FileSystemFileHandle;
     writable: FileSystemWritableFileStream;
 };
 
@@ -145,6 +150,7 @@ export const createReceiveFile = async (directory: ReceiveDirectory, filename: s
         name: filename,
         size: 0,
         directory,
+        handle,
         writable,
     };
 };

@@ -8,6 +8,7 @@ import {
     closeFileReader,
     createTransferFilePreviewUri,
     createReceiveFile,
+    createReceiveFilePreviewUri,
     deleteFile,
     finalizeReceiveFile,
     getFileSize,
@@ -257,7 +258,13 @@ export function FileWorkspace({
                 isReceivingFileRef.current = false;
                 if (receivedSize === size) {
                     await finalizeReceiveFile(fileHandle);
-                    updateFileTransferProgress(filename, size, "completed");
+                    let thumb: string | null = null;
+                    try {
+                        thumb = await createReceiveFilePreviewUri(fileHandle);
+                    } catch (error) {
+                        console.warn("Unable to create received file preview", filename, error);
+                    }
+                    updateFileTransferProgress(filename, size, "completed", thumb ?? undefined);
                     setIsFileTransferActive(false);
                     fileChannelSend({ type: "file-end-ack", filename, size });
                     console.log(`Received ${filename}`);
@@ -543,7 +550,7 @@ export function FileWorkspace({
         setFileTransferProgress(fileProgressList);
     };
 
-    const updateFileTransferProgress = (filename: string, transferred: number, status: FileTransferStatus) => {
+    const updateFileTransferProgress = (filename: string, transferred: number, status: FileTransferStatus, thumb?: string) => {
         setFileTransferProgress((fileProgressList) => {
             return fileProgressList.map(fileProgress => {
                 if (fileProgress.name === filename) {
@@ -551,6 +558,7 @@ export function FileWorkspace({
                         ...fileProgress,
                         status,
                         transferred: Math.min(transferred, fileProgress.size),
+                        ...(thumb ? {thumb} : {}),
                     };
                 }
                 return fileProgress;

@@ -1,11 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import {convertFileSrc, invoke} from "@tauri-apps/api/core";
 
 const isImageFile = (file: TransferFile) => {
-    return file.type.startsWith("image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
+    return (file.type?.startsWith("image/") ?? false) || /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(file.name);
 };
 
 const isVideoFile = (file: TransferFile) => {
-    return file.type.startsWith("video/") || /\.(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|webm|wmv)$/i.test(file.name);
+    return (file.type?.startsWith("video/") ?? false) || /\.(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|webm|wmv)$/i.test(file.name);
 };
 
 // upload files
@@ -37,16 +37,26 @@ export const closeFileReader = (reader: FileReader) => {
 };
 
 // thumb
-export const createTransferFilePreviewUri = async (file: TransferFile) => {
-    if (isImageFile(file)) {
-        return URL.createObjectURL(file);
+type PreviewFile = {
+    name: string;
+    type?: string;
+    uri?: string;
+};
+
+export const createTransferFilePreviewUri = async (file: TransferFile | PreviewFile) => {
+    const previewFile = file as TransferFile;
+    const sourceUri = "uri" in file && file.uri ? file.uri : undefined;
+    if (isImageFile(previewFile)) {
+        return sourceUri ?? URL.createObjectURL(previewFile);
     }
-    if (isVideoFile(file)) {
-        const sourceVideoUri = URL.createObjectURL(file);
+    if (isVideoFile(previewFile)) {
+        const sourceVideoUri = sourceUri ?? URL.createObjectURL(previewFile);
         try {
             return await createVideoThumb(sourceVideoUri);
         } finally {
-            URL.revokeObjectURL(sourceVideoUri);
+            if (sourceVideoUri.startsWith("blob:")) {
+                URL.revokeObjectURL(sourceVideoUri);
+            }
         }
     }
     async function createVideoThumb(sourceUri: string) {
@@ -90,6 +100,11 @@ export const createTransferFilePreviewUri = async (file: TransferFile) => {
         });
     }
     return null;
+};
+
+export const createReceiveFilePreviewUri = async (file: ReceiveFile) => {
+    const uri = convertFileSrc(`${file.directory.path}/${file.name}`);
+    return createTransferFilePreviewUri({name: file.name, uri});
 };
 
 export const releaseTransferFilePreviewUri = (uri: string) => {

@@ -41,6 +41,10 @@ export const createTransferFilePreviewUri = async (file: TransferFile) => {
     return thumbnail.uri;
 };
 
+export const createReceiveFilePreviewUri = async (file: ReceiveFile) => {
+    return createTransferFilePreviewUri(file);
+};
+
 export const releaseTransferFilePreviewUri = (_uri: string) => undefined;
 
 // setting model

@@ -21,6 +21,7 @@ export declare const closeFileReader: (reader: FileReader) => void;
 
 // thumb
 export declare const createTransferFilePreviewUri: (file: TransferFile) => Promise<string>;
+export declare const createReceiveFilePreviewUri: (file: ReceiveFile) => Promise<string | null>;
 export declare const releaseTransferFilePreviewUri: (uri: string) => void;
 
 // setting model
