@@ -266,6 +266,7 @@ export function FileWorkspace({
                     updateFileTransferProgress(filename, -1, "failed");
                     fileChannelSend({ type: "file-end-reject", filename, size });
                     console.warn("file is damaged, receivedSize and original size is", filename, receivedSize, size);
+                    await deleteFile(fileHandle);
                 }
                 fileHandleRef.current = undefined;
             } catch (e) {

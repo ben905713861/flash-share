@@ -120,9 +120,9 @@ type DirectoryPickerGlobal = typeof globalThis & {
 
 export type ReceiveFile = {
     name: string;
-    chunks: Uint8Array[];
     size: number;
     directory: ReceiveDirectory;
+    writable: FileSystemWritableFileStream;
 };
 
 export const pickReceiveDirectory = async (): Promise<ReceiveDirectory> => {
@@ -139,16 +139,20 @@ export const pickReceiveDirectory = async (): Promise<ReceiveDirectory> => {
 };
 
 export const createReceiveFile = async (directory: ReceiveDirectory, filename: string): Promise<ReceiveFile> => {
+    const handle = await directory.handle.getFileHandle(filename, {create: true});
+    const writable = await handle.createWritable();
     return {
         name: filename,
-        chunks: [],
         size: 0,
         directory,
+        writable,
     };
 };
 
-export const appendFileChunk = (file: ReceiveFile, bytes: Uint8Array) => {
-    file.chunks.push(bytes);
+export const appendFileChunk = async (file: ReceiveFile, bytes: Uint8Array) => {
+    const chunk = new Uint8Array(bytes.byteLength);
+    chunk.set(bytes);
+    await file.writable.write(chunk);
     file.size += bytes.byteLength;
 };
 
@@ -157,22 +161,13 @@ export const getFileSize = (file: ReceiveFile) => {
 };
 
 export const finalizeReceiveFile = async (file: ReceiveFile) => {
-    const blob = new Blob(file.chunks.map((chunk) => Uint8Array.from(chunk)));
-    if (file.directory.handle) {
-        const handle = await file.directory.handle.getFileHandle(file.name, {create: true});
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return;
-    }
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = file.name;
-    link.click();
-    URL.revokeObjectURL(url);
+    await file.writable.close();
 };
 
-export const deleteFile = (file: ReceiveFile) => {
-    void file;
+export const deleteFile = async (file: ReceiveFile) => {
+    try {
+        await file.writable.abort();
+    } finally {
+        await file.directory.handle.removeEntry(file.name);
+    }
 };
