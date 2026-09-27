@@ -248,6 +248,13 @@ export const s = StyleSheet.create({
   transferCount: { fontSize: 13, fontWeight: "600" },
   transferFile: { gap: 8, paddingVertical: 4 },
   transferFileRow: { flexDirection: "row", alignItems: "center", gap: 11 },
+  transferFileThumbnail: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    backgroundColor: "#e8edf4",
+    flexShrink: 0,
+  },
   transferFileBadge: { width: 38, height: 38, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   transferFileBadgeText: { fontSize: 11, fontWeight: "800" },
   transferFileInfo: { flex: 1, minWidth: 0, gap: 3 },

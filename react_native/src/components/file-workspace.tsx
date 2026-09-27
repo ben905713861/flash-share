@@ -428,7 +428,10 @@ export function FileWorkspace({
             return;
         }
         clearSelectedFiles();
-        initFileProgress(fileDetails);
+        const fileDetailsWithThumb: TransferFile[] = sendingFilesRef.current.map((file) => {
+            return { name: file.name, size: file.size, thumb: file.thumb };
+        });
+        initFileProgress(fileDetailsWithThumb);
         console.log("Waiting for the other device to approve file transfer");
     };
 
@@ -645,9 +648,18 @@ export function FileWorkspace({
                         const percent = file.size === 0 ? 100 : Math.round((file.transferred / file.size) * 100);
                         return <View key={file.name} style={[s.transferFile, index < fileTransferProgress.length - 1 && { borderBottomWidth: 1, borderBottomColor: palette.border, paddingBottom: 12 }]}>
                             <View style={s.transferFileRow}>
-                                <View style={[s.transferFileBadge, { backgroundColor: file.status === "failed" ? "#f9d9d7" : file.status === "completed" ? "#d9f2e3" : file.status === "cancelled" || file.status === "declined" ? "#fff0d9" : "#e7efff" }]}>
-                                    <Text style={[s.transferFileBadgeText, { color: file.status === "failed" ? "#a52a25" : file.status === "completed" ? "#187044" : file.status === "cancelled" || file.status === "declined" ? "#9a5b00" : "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
-                                </View>
+                                {file.thumb ? (
+                                    <Image
+                                        source={{ uri: file.thumb }}
+                                        style={s.transferFileThumbnail}
+                                        contentFit="cover"
+                                        transition={120}
+                                    />
+                                ) : (
+                                    <View style={[s.transferFileBadge, { backgroundColor: file.status === "failed" ? "#f9d9d7" : file.status === "completed" ? "#d9f2e3" : file.status === "cancelled" || file.status === "declined" ? "#fff0d9" : "#e7efff" }]}>
+                                        <Text style={[s.transferFileBadgeText, { color: file.status === "failed" ? "#a52a25" : file.status === "completed" ? "#187044" : file.status === "cancelled" || file.status === "declined" ? "#9a5b00" : "#2456b8" }]}>{fileTypeLabel(file.name)}</Text>
+                                    </View>
+                                )}
                                 <View style={s.transferFileInfo}>
                                     <View style={s.transferSummary}>
                                         <Text numberOfLines={1} style={[s.transferName, { color: palette.text }]}>{file.name}</Text>
