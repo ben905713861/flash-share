@@ -159,6 +159,7 @@ export function FileWorkspace({
     const [incomingFiles, setIncomingFiles] = useState<TransferFile[]>([]);
     const [isReceiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
+    const [isAwaitingFileApproval, setIsAwaitingFileApproval] = useState(false);
     const [isFileTransferActive, setIsFileTransferActive] = useState(false);
 
 
@@ -180,6 +181,7 @@ export function FileWorkspace({
             fileRequestComes(fileDetails);
             initFileProgress(fileDetails);
         } else if (type === "file-request-ack") {
+            setIsAwaitingFileApproval(false);
             updateFileTransferStatus("queued");
             const file = sendingFilesRef.current[0];
             if (file) {
@@ -187,6 +189,7 @@ export function FileWorkspace({
             }
         } else if (type === "file-request-reject") {
             setIsSendingFile(false);
+            setIsAwaitingFileApproval(false);
             updateFileTransferStatus("declined");
             console.log("File request declined by the other device");
         } else if (type === "file-start") {
@@ -233,6 +236,7 @@ export function FileWorkspace({
                     console.info("file transfer is stopped");
                 }
                 setIsSendingFile(false);
+                setIsAwaitingFileApproval(false);
                 setIsFileTransferActive(false);
             }
         } else if (type === "file-continue") {
@@ -291,6 +295,7 @@ export function FileWorkspace({
             // task completed
             if (sendingFilesRef.current.length === 0) {
                 setIsSendingFile(false);
+                setIsAwaitingFileApproval(false);
                 setIsFileTransferActive(false);
                 clearSelectedFiles();
                 console.log("File transfer completed");
@@ -307,6 +312,7 @@ export function FileWorkspace({
             const { filename } = payload;
             console.warn("file transferring", type, filename);
             setIsSendingFile(false);
+            setIsAwaitingFileApproval(false);
             setIsFileTransferActive(false);
             updateFileTransferProgress(filename, -1, "failed");
         }
@@ -340,6 +346,7 @@ export function FileWorkspace({
             isReceivingFileRef.current = false;
             fileHandleRef.current = undefined;
             setIsSendingFile(false);
+            setIsAwaitingFileApproval(false);
             setIsFileTransferActive(false);
             updateFileTransferProgress(fileHandle.name, -1, "failed");
         }
@@ -350,6 +357,7 @@ export function FileWorkspace({
         interruptFileSendingRef.current?.(false);
         isReceivingFileRef.current = false;
         setIsSendingFile(false);
+        setIsAwaitingFileApproval(false);
         setIsFileTransferActive(false);
         updateFileTransferStatus("cancelled");
         const fileHandle = fileHandleRef.current;
@@ -421,6 +429,7 @@ export function FileWorkspace({
             return;
         }
         setIsSendingFile(true);
+        setIsAwaitingFileApproval(true);
         setIsFileTransferActive(false);
         sendingFilesRef.current = [...files];
         const fileDetails: TransferFile[] = sendingFilesRef.current.map((file) => {
@@ -432,6 +441,7 @@ export function FileWorkspace({
         });
         if (!succ) {
             setIsSendingFile(false);
+            setIsAwaitingFileApproval(false);
             showAlert("Unable to send files", "Connect to the other device before sending files.");
             return;
         }
@@ -479,6 +489,7 @@ export function FileWorkspace({
         isReceivingFileRef.current = false;
         fileHandleRef.current = undefined;
         setIsSendingFile(false);
+        setIsAwaitingFileApproval(false);
         setIsFileTransferActive(false);
         updateFileTransferStatus("failed");
     };
@@ -688,15 +699,15 @@ export function FileWorkspace({
             <View style={s.footer}>
                 <Text style={{ color: palette.muted }}>{selectedFiles.length ? `${formatBytes(selectedFiles.reduce((total, file) => total + file.size, 0))} ready` : "No files selected"}</Text>
                 <View style={s.footerActions}>
-                    {hasRetryableFiles ? (
+                    {!isFileTransferActive && !isReceiveDialogOpen && (hasRetryableFiles ? (
                         <Pressable style={s.primary} onPress={retryRemainingFiles}>
                             <Text style={s.primaryText}>Retry remaining</Text>
                         </Pressable>
-                    ) : (
+                    ) : (!isSendingFile || isAwaitingFileApproval) && (
                         <Pressable style={[s.primary, (!selectedFiles.length || isSendingFile) && s.disabled]} disabled={!selectedFiles.length || isSendingFile} onPress={() => { sendFiles(selectedFiles) }}>
                             <Text style={s.primaryText}>{isSendingFile ? "Awaiting approval" : "Send files"}</Text>
                         </Pressable>
-                    )}
+                    ))}
                     {isFileTransferActive &&
                         <Pressable style={s.danger} onPress={() => void stopFileTransfer()}>
                             <Text style={s.dangerText}>Stop</Text>
