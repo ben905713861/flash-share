@@ -65,6 +65,9 @@ export const createTransferFilePreviewUri = async (file: TransferFile | PreviewF
             video.preload = "auto";
             video.muted = true;
             video.playsInline = true;
+            if (!sourceUri.startsWith("blob:")) {
+                video.crossOrigin = "anonymous";
+            }
             let captured = false;
             const capture = () => {
                 if (captured) return;
@@ -103,7 +106,9 @@ export const createTransferFilePreviewUri = async (file: TransferFile | PreviewF
 };
 
 export const createReceiveFilePreviewUri = async (file: ReceiveFile) => {
-    const uri = convertFileSrc(`${file.directory.path}/${file.name}`);
+    const directory = file.directory.path ?? "";
+    await invoke("allow_receive_file", {directory, filename: file.name});
+    const uri = convertFileSrc(`${directory}/${file.name}`);
     return createTransferFilePreviewUri({name: file.name, uri});
 };
 

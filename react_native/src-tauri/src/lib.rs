@@ -7,6 +7,7 @@ use std::{
 };
 
 use serde::Serialize;
+use tauri::Manager;
 
 static RECEIVE_FILE_HANDLES: OnceLock<Mutex<HashMap<PathBuf, File>>> = OnceLock::new();
 const MAX_TRANSFER_CHUNK_SIZE: usize = 4 * 1024 * 1024;
@@ -24,6 +25,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       pick_transfer_files,
       pick_receive_directory,
+      allow_receive_file,
       open_receive_file,
       append_receive_file,
       close_receive_file,
@@ -69,10 +71,26 @@ fn pick_transfer_files() -> Result<Option<Vec<TransferFile>>, String> {
 }
 
 #[tauri::command]
-fn pick_receive_directory() -> Option<String> {
-  rfd::FileDialog::new()
+fn pick_receive_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+  let Some(path) = rfd::FileDialog::new()
     .pick_folder()
-    .map(|path| path.to_string_lossy().into_owned())
+  else {
+    return Ok(None);
+  };
+  app
+    .asset_protocol_scope()
+    .allow_directory(&path, true)
+    .map_err(|error| error.to_string())?;
+  Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+fn allow_receive_file(app: tauri::AppHandle, directory: String, filename: String) -> Result<(), String> {
+  let path = receive_file_path(&directory, &filename)?;
+  app
+    .asset_protocol_scope()
+    .allow_file(path)
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

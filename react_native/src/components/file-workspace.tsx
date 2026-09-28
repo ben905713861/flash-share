@@ -717,7 +717,7 @@ export function FileWorkspace({
                     ))}
                     <View style={s.footer}>
                         <Pressable style={s.secondary} onPress={rejectFiles}><Text style={s.secondaryText}>Decline</Text></Pressable>
-                        <Pressable style={s.primary} onPress={() => void acceptFiles()}><Text style={s.primaryText}>Choose folder & receive</Text></Pressable>
+                        <Pressable style={s.primary} onPress={() => void acceptFiles()}><Text style={s.primaryText}>Receive</Text></Pressable>
                     </View>
                 </View>
             </View>
