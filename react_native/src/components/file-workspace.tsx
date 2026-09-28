@@ -578,6 +578,7 @@ export function FileWorkspace({
     };
 
     const title = (isSendingFile || sendingFilesRef.current.length > 0) ? "Sending files" : "Receiving files";
+    const isFileWorkspaceBusy = isSendingFile || isFileTransferActive || isReceiveDialogOpen;
     const hasRetryableFiles = !isSendingFile
         && sendingFilesRef.current.length > 0
         && fileTransferProgress.some((file) =>
@@ -586,9 +587,9 @@ export function FileWorkspace({
         <>
         <View style={s.toolBlock}>
             <FileDropZone
-                style={[s.filePicker, { borderColor: palette.border, backgroundColor: palette.card }, isSendingFile && s.disabled]}
+                style={[s.filePicker, { borderColor: palette.border, backgroundColor: palette.card }, isFileWorkspaceBusy && s.disabled]}
                 activeStyle={{ backgroundColor: "#f4f4f5" }}
-                disabled={isSendingFile}
+                disabled={isFileWorkspaceBusy}
                 onFilesSelected={applySelectedFiles}
             >
                 <View style={[s.filePickerInner, { borderColor: "rgba(145, 155, 168, 0.58)" }]}>
