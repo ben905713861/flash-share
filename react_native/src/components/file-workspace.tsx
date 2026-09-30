@@ -523,7 +523,13 @@ export function FileWorkspace({
                     console.warn("Unable to create file preview", file.name, error);
                 }
             }));
-            setSelectedFiles(files);
+            const incomingNames = new Set<string>(files.map((file) => file.name));
+            setSelectedFiles((currentFiles) => {
+                const currentFiles2 = currentFiles.filter((file) => {
+                    return !incomingNames.has(file.name);
+                });
+                return [...currentFiles2, ...files];
+            });
         }
         sendingFilesRef.current = [];
         setFileTransferProgress([]);

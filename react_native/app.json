@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bitcode": false
+      "bitcode": false,
+      "bundleIdentifier": "com.anonymous.react_native"
     },
     "android": {
       "adaptiveIcon": {
@@ -38,6 +39,17 @@
     "plugins": [
       "expo-router",
       "expo-camera",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["*/*"],
+          "androidMultiIntentFilters": ["*/*"],
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsFileWithMaxCount": 100
+          },
+          "iosAppGroupIdentifier": "group.com.anonymous.react_native.share"
+        }
+      ],
       "@config-plugins/react-native-webrtc",
       [
         "expo-splash-screen",
