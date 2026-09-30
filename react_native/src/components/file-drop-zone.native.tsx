@@ -35,7 +35,9 @@ export function FileDropZone({children, style, disabled, onFilesSelected}: FileD
     }, [shareIntentError]);
 
     useEffect(() => {
-        if (!hasShareIntent || !shareIntent.files || shareIntent.files.length <= 0) {
+        // Keep the native share intent pending while a transfer is active.
+        // The effect runs again when the workspace becomes available.
+        if (disabled || !hasShareIntent || !shareIntent.files || shareIntent.files.length <= 0) {
             return;
         }
         const files = shareIntent.files
@@ -48,7 +50,7 @@ export function FileDropZone({children, style, disabled, onFilesSelected}: FileD
         }
         onFilesSelected(files);
         resetShareIntent(true);
-    }, [hasShareIntent, shareIntent.files, resetShareIntent]);
+    }, [disabled, hasShareIntent, shareIntent.files, resetShareIntent]);
 
     return <Pressable style={style} disabled={disabled} onPress={() => void selectFiles()}>{children}</Pressable>;
 }
