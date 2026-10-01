@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Flash Share Privacy Policy / Flash Share 隐私政策">
+  <title>Flash Share Privacy Policy</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --text: #172033;
+      --muted: #58657a;
+      --line: #dfe5ef;
+      --accent: #246bdb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { max-width: 920px; margin: 0 auto; padding: 48px 20px 72px; }
+    article { background: var(--surface); border: 1px solid var(--line); padding: 36px clamp(22px, 5vw, 60px); }
+    h1, h2, h3 { line-height: 1.3; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 42px); }
+    h2 { margin: 38px 0 12px; font-size: 24px; border-top: 1px solid var(--line); padding-top: 26px; }
+    h3 { margin: 24px 0 8px; font-size: 18px; }
+    p { margin: 10px 0; }
+    ul { margin: 8px 0 16px; padding-left: 24px; }
+    a { color: var(--accent); }
+    .meta { color: var(--muted); margin-bottom: 30px; }
+    .language { color: var(--muted); font-size: 14px; margin-top: -4px; }
+    .notice { border-left: 4px solid var(--accent); background: #eef4ff; padding: 14px 16px; margin: 20px 0; }
+    @media (max-width: 600px) { main { padding: 20px 10px 40px; } article { padding: 24px 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <header>
+        <h1>Flash Share 隐私政策</h1>
+        <p class="language">Flash Share Privacy Policy</p>
+        <p class="meta">生效日期 / Effective date: 2026 年 10 月 1 日 / October 1, 2026</p>
+      </header>
+
+      <div class="notice">
+        本政策基于当前 Flash Share 客户端实现。WebSocket 信令服务器的日志内容和保存期限取决于实际部署配置，正式发布前应据此更新相关说明。
+        <br>
+        This policy is based on the current Flash Share client. The contents and retention period of WebSocket server logs depend on the actual deployment and should be updated before public release.
+      </div>
+
+      <h2>一、信息处理 / 1. Information We Process</h2>
+      <h3>配对和连接信息 / Pairing and connection information</h3>
+      <p>为了帮助设备建立连接，本应用会处理设备配对码、配对验证码、房间密钥、WebRTC 协商信息（包括 SDP 和 ICE candidate）、连接状态及连接延迟。这些信息仅用于配对、建立连接、维护连接和断开处理。</p>
+      <p>To connect paired devices, the App may process pairing codes, verification codes, room keys, WebRTC negotiation data including SDP and ICE candidates, connection status, and connection latency. This information is used only for pairing, connection establishment, maintenance, and disconnection handling.</p>
+
+      <h3>用户主动传输的文本和文件 / Text and files sent by the user</h3>
+      <p>用户可以向已配对设备发送文本和文件。应用会处理文件名称、大小和类型等元数据，但不会自动扫描、上传或建立用户文件索引。</p>
+      <p>Users may send text and files to a paired device. The App processes metadata such as file names, sizes, and types, but does not automatically scan, upload, or index user files.</p>
+      <p>在连接条件允许时，内容通过 WebRTC 数据通道在配对设备之间直接传输。信令服务器可能处理连接协商信息，但当前客户端不以信令服务器作为文件内容的永久存储服务。</p>
+      <p>When network conditions allow, content is transferred directly between paired devices through WebRTC data channels. The signaling server may process connection negotiation data, but the current client does not use it as permanent storage for file content.</p>
+
+      <h3>本地保存的信息 / Information stored locally</h3>
+      <p>应用可能在设备本地保存主题偏好、最近输入的文本、房间密钥和用户选择的文件保存目录。正常运行时，这些信息不会自动上传给 Ben Hu 运营的服务器。</p>
+      <p>The App may store theme preferences, recently entered text, room keys, and the directory selected for received files locally. These items are not automatically uploaded to servers operated by Ben Hu during normal use.</p>
+
+      <h3>相机和系统权限 / Camera and system permissions</h3>
+      <p>二维码扫描功能会请求相机权限，仅用于扫描设备配对二维码。应用不会保存或上传相机画面，也不会在后台持续访问相机。应用可能请求网络、文件访问及 WebRTC 所需的系统权限。当前版本不提供语音通话或录音功能。</p>
+      <p>The QR scanner requests camera access only to scan a device pairing code. The App does not save or upload camera footage or access the camera continuously in the background. The App may request network, file-system, and WebRTC-related permissions. The current version does not provide voice calls or audio recording.</p>
+
+      <h2>二、信息用途 / 2. How We Use Information</h2>
+      <p>我们仅使用相关信息来建立和验证设备配对、传输用户主动选择的内容、保存用户设置、提供连接状态和错误提示，以及防止异常连接或滥用行为。</p>
+      <p>We use relevant information only to pair and verify devices, transfer user-selected content, store preferences, provide connection status and error messages, and prevent abnormal connections or abuse.</p>
+      <p>我们不会出售或出租用户信息，也不会将用户传输的文本或文件用于广告、行为画像或模型训练。</p>
+      <p>We do not sell or rent user information, and do not use user-transmitted text or files for advertising, behavioral profiling, or model training.</p>
+
+      <h2>三、第三方服务 / 3. Third-Party Services</h2>
+      <h3>WebSocket 信令服务 / WebSocket signaling service</h3>
+      <p>应用通过配置的 WebSocket 地址交换配对和 WebRTC 协商信息。根据服务器配置，该服务可能接收 IP 地址、连接时间、连接状态和错误等技术日志。日志内容、保存期限和处理地点取决于实际部署。</p>
+      <p>The App uses a configured WebSocket endpoint to exchange pairing and WebRTC negotiation data. Depending on the server configuration, it may receive technical logs such as IP addresses, connection times, connection status, and errors. Log contents, retention, and processing locations depend on the deployment.</p>
+      <h3>WebRTC 和 STUN / WebRTC and STUN</h3>
+      <p>当前客户端使用 Google 公共 STUN 服务 <code>stun:stun.l.google.com:19302</code>。该服务可能接收建立网络连接所需的 IP 地址和网络元数据；根据当前客户端代码，它不会接收应用发送的文本或文件内容。</p>
+      <p>The current client uses Google’s public STUN service, <code>stun:stun.l.google.com:19302</code>. It may receive IP addresses and network metadata needed for connection establishment; based on the current client code, it does not receive text or file content sent by the App.</p>
+
+      <h2>四、保存期限 / 4. Data Retention</h2>
+      <ul>
+        <li>配对和 WebRTC 信令信息通常只在建立或维护连接所需的期间使用。<br>Pairing and WebRTC signaling data are generally used only as long as needed to establish or maintain a connection.</li>
+        <li>本地设置和文本会保留到用户清除、卸载应用或清除应用数据。<br>Local settings and text remain until the user clears them, uninstalls the App, or clears App data.</li>
+        <li>接收文件会保留在用户选择的目录中，直到用户删除。<br>Received files remain in the directory selected by the user until deleted.</li>
+        <li>WebSocket 服务端日志的保存期限由实际服务器配置决定。<br>WebSocket server log retention depends on the actual server configuration.</li>
+      </ul>
+
+      <h2>五、安全 / 5. Security</h2>
+      <p>应用使用配对确认和 WebRTC 数据通道来降低未经授权连接的风险。用户应仅与可信设备共享配对码和验证码。互联网传输仍可能受到攻击、设备问题或第三方基础设施故障影响。</p>
+      <p>The App uses pairing confirmation and WebRTC data channels to reduce the risk of unauthorized connections. Users should share pairing and verification codes only with trusted devices. Internet transmissions may still be affected by attacks, device compromise, or third-party infrastructure failures.</p>
+
+      <h2>六、用户选择和权利 / 6. User Choices and Rights</h2>
+      <p>用户可以拒绝相机权限、停止配对、断开设备、清除本地主题、文本和房间信息、更改或清除文件保存目录，以及删除接收的文件。在适用法律要求的范围内，用户可以请求访问、更正或删除与其相关的信息。</p>
+      <p>Users may deny camera access, stop pairing, disconnect devices, clear local theme, text, and room information, change or clear the file-saving directory, and delete received files. Where required by applicable law, users may request access to, correction of, or deletion of information relating to them.</p>
+
+      <h2>七、儿童隐私 / 7. Children’s Privacy</h2>
+      <p>本应用不面向未满 13 周岁的儿童，也不会明知收集儿童的个人信息。如果监护人认为儿童向本应用提供了个人信息，请联系我们。</p>
+      <p>The App is not directed to children under 13 and does not knowingly collect personal information from children. Parents or guardians may contact us if they believe a child has provided personal information.</p>
+
+      <h2>八、跨境处理 / 8. International Data Processing</h2>
+      <p>WebSocket 信令服务、STUN 服务和平台服务可能位于用户所在国家或地区之外。相关技术数据可能根据服务部署位置进行跨境传输和处理。</p>
+      <p>The WebSocket signaling service, STUN service, and platform services may be located outside the user’s country or region. Technical data may be transferred to and processed in other jurisdictions depending on service deployment.</p>
+
+      <h2>九、政策更新 / 9. Changes to This Policy</h2>
+      <p>我们可能根据应用功能、服务或法律要求更新本政策。更新后的版本会在本页面提供，并更新生效日期。继续使用本应用表示用户接受更新后的政策。</p>
+      <p>We may update this policy when the App, its services, or legal requirements change. The updated version will be made available on this page with a revised effective date. Continued use of the App means that the user accepts the revised policy.</p>
+
+      <h2>十、联系我们 / 10. Contact Us</h2>
+      <p><strong>Ben Hu</strong><br>
+        邮箱 / Email: <a href="mailto:ben905713861@gmail.com">ben905713861@gmail.com</a><br>
+        项目地址 / Project website: <a href="https://github.com/ben905713861/flash-share">https://github.com/ben905713861/flash-share</a>
+      </p>
+    </article>
+  </main>
+</body>
+</html>
