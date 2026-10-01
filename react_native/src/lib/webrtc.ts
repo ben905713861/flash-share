@@ -130,7 +130,7 @@ export const createWebRTC = ({
                 }
                 lastPongAt = Date.now();
                 heartbeatLatency = Math.max(0, lastPongAt - sentAt);
-                console.debug("heartbeatLatency=", heartbeatLatency)
+                // console.debug("heartbeatLatency=", heartbeatLatency)
                 onHeartbeat(heartbeatLatency);
             }
         };

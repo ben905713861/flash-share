@@ -513,24 +513,24 @@ export function FileWorkspace({
 
     const applySelectedFiles = async (files: TransferFile[]) => {
         if (hasDuplicateFilenames(files)) {
-            setSelectedFiles([]);
             showAlert("Duplicate filenames", "Files with duplicate names cannot be selected together.");
-        } else {
-            await Promise.all(files.map(async (file) => {
-                try {
-                    file.thumb = await createTransferFilePreviewUri(file);
-                } catch (error) {
-                    console.warn("Unable to create file preview", file.name, error);
-                }
-            }));
-            const incomingNames = new Set<string>(files.map((file) => file.name));
-            setSelectedFiles((currentFiles) => {
-                const currentFiles2 = currentFiles.filter((file) => {
-                    return !incomingNames.has(file.name);
-                });
-                return [...currentFiles2, ...files];
-            });
+            return;
         }
+        await Promise.all(files.map(async (file) => {
+            try {
+                file.thumb = await createTransferFilePreviewUri(file);
+            } catch (error) {
+                console.warn("Unable to create file preview", file.name, error);
+            }
+        }));
+        const incomingNames = new Set<string>(files.map((file) => file.name));
+        console.log("Incoming file names", incomingNames);
+        setSelectedFiles((currentFiles) => {
+            const currentFiles2 = currentFiles.filter((file) => {
+                return !incomingNames.has(file.name);
+            });
+            return [...currentFiles2, ...files];
+        });
         sendingFilesRef.current = [];
         setFileTransferProgress([]);
     };
