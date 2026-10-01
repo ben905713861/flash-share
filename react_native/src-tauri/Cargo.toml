@@ -1,10 +1,10 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "1.0.0"
+description = "Flash Share: direct text and file sharing between paired devices"
+authors = ["Ben Hu"]
 license = ""
-repository = ""
+repository = "https://github.com/ben905713861/flash-share"
 edition = "2021"
 rust-version = "1.77.2"
 

@@ -1,23 +1,22 @@
 {
   "expo": {
-    "name": "react_native",
-    "slug": "react_native",
+    "name": "Flash Share",
+    "slug": "flash-share",
     "version": "1.0.0",
+    "description": "Pair devices and share text or files directly, without uploading them to a central service.",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "reactnative",
+    "icon": "./assets/images/flash-share-icon.png",
+    "scheme": "flashshare",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/flash-share-icon.png",
       "bitcode": false,
-      "bundleIdentifier": "com.anonymous.react_native"
+      "bundleIdentifier": "com.wuxb.flashshare"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0B1F33",
+        "foregroundImage": "./assets/images/flash-share-icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -30,11 +29,16 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH"
       ],
-      "package": "com.anonymous.react_native"
+      "package": "com.wuxb.flashshare"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/flash-share-favicon.png"
+    },
+    "extra": {
+      "supportEmail": "ben905713861@gmail.com",
+      "supportUrl": "https://github.com/ben905713861/flash-share",
+      "privacyPolicyUrl": "https://ben905713861.github.io/flash-share/privacy.html"
     },
     "plugins": [
       "expo-router",
@@ -47,15 +51,15 @@
           "iosActivationRules": {
             "NSExtensionActivationSupportsFileWithMaxCount": 100
           },
-          "iosAppGroupIdentifier": "group.com.anonymous.react_native.share"
+          "iosAppGroupIdentifier": "group.com.wuxb.flashshare.share"
         }
       ],
       "@config-plugins/react-native-webrtc",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
+          "backgroundColor": "#0B1F33",
+          "image": "./assets/images/flash-share-splash.png",
           "imageWidth": 76
         }
       ]

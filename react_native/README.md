@@ -1,6 +1,13 @@
 # Flash Share
 
-Flash Share is a React Native app for pairing two devices and sharing text or files directly.
+Flash Share lets you pair two devices and share text or files directly, without uploading them to a central service.
+
+- **Platforms:** Android, iOS, Web, and Windows (Tauri)
+- **Version:** 1.0.0
+- **Developer:** Ben Hu
+- **Support:** [ben905713861@gmail.com](mailto:ben905713861@gmail.com)
+- **Project:** https://github.com/ben905713861/flash-share
+- **Privacy policy:** https://ben905713861.github.io/flash-share/privacy.html
 
 ## Get started
 

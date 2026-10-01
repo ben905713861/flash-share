@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Flash Share</title>
+  <desc id="desc">Two connected devices sharing a file</desc>
+  <rect width="1024" height="1024" rx="224" fill="#0B1F33"/>
+  <path d="M294 250h194c31 0 56 25 56 56v219c0 31-25 56-56 56H294c-31 0-56-25-56-56V306c0-31 25-56 56-56Z" fill="#26C6B8"/>
+  <path d="M536 443h194c31 0 56 25 56 56v219c0 31-25 56-56 56H536c-31 0-56-25-56-56V499c0-31 25-56 56-56Z" fill="#4F8CFF"/>
+  <path d="M512 351v322" stroke="#F7FBFF" stroke-width="34" stroke-linecap="round" stroke-dasharray="10 46"/>
+  <path d="m412 366 100-100 100 100M612 658 512 758 412 658" fill="none" stroke="#F7FBFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "react_native",
-  "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "productName": "Flash Share",
+  "version": "1.0.0",
+  "identifier": "com.wuxb.flashshare",
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:8082",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "react_native",
+        "title": "Flash Share",
         "width": 800,
         "height": 600,
         "resizable": true,
