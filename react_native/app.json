@@ -43,6 +43,7 @@
     "plugins": [
       "expo-router",
       "expo-camera",
+      "./plugins/with-android-architectures",
       [
         "expo-share-intent",
         {
