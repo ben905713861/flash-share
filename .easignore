@@ -1,0 +1,39 @@
+# EAS project is inside react_native/, but the VCS root is this directory.
+/\.git/
+/\.idea/
+
+/cf-ws-server
+
+# Dependencies and generated output
+/node_modules/
+/react_native/node_modules/
+/react_native/.expo/
+/react_native/dist/
+/react_native/dist-test/
+/react_native/web-build/
+/react_native/android/
+/react_native/ios/
+/react_native/.kotlin/
+/react_native/**/build/
+/react_native/src-tauri/target/
+/react_native/.metro-health-check*
+/react_native/**/*.tsbuildinfo
+
+# Local configuration and credentials
+/react_native/.env*.local
+/react_native/*.jks
+/react_native/*.p8
+/react_native/*.p12
+/react_native/*.key
+/react_native/*.mobileprovision
+/react_native/*.pem
+
+# Logs and editor/system files
+/react_native/npm-debug.*
+/react_native/yarn-debug.*
+/react_native/yarn-error.*
+/react_native/.DS_Store
+/react_native/.vscode/
+
+# Generated TypeScript declaration
+/react_native/expo-env.d.ts

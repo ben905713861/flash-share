@@ -38,7 +38,28 @@
     "extra": {
       "supportEmail": "ben905713861@gmail.com",
       "supportUrl": "https://github.com/ben905713861/flash-share",
-      "privacyPolicyUrl": "https://ben905713861.github.io/flash-share/privacy.html"
+      "privacyPolicyUrl": "https://ben905713861.github.io/flash-share/privacy.html",
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ShareExtension",
+                  "bundleIdentifier": "com.wuxb.flashshare.share-extension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.wuxb.flashshare.share"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "3c591de7-e5de-4a72-8d64-1e2f72953ffe"
+      }
     },
     "plugins": [
       "expo-router",
@@ -47,8 +68,12 @@
       [
         "expo-share-intent",
         {
-          "androidIntentFilters": ["*/*"],
-          "androidMultiIntentFilters": ["*/*"],
+          "androidIntentFilters": [
+            "*/*"
+          ],
+          "androidMultiIntentFilters": [
+            "*/*"
+          ],
           "iosActivationRules": {
             "NSExtensionActivationSupportsFileWithMaxCount": 100
           },
