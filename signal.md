@@ -1,4 +1,4 @@
-- 传输配置：React Native 客户端从 `react_native/.env.local` 的 `EXPO_PUBLIC_WS_URL` 读取 WebSocket 基地址，值必须包含 `/ws`。Wrangler 明文本地服务使用 `ws://`；根 `ws-server.ts` 使用证书并监听 `8787`，应使用 `wss://`。
+- 传输配置：React Native 客户端从 `react_native/.env.local` 的 `EXPO_PUBLIC_WS_URL` 读取 WebSocket 基地址，值必须包含 `/ws`。Wrangler 明文本地服务使用 `ws://`；根 `ws-server/ws-server.ts` 使用证书并监听 `8787`，应使用 `wss://`。
 - PAIR：客户端连接 `/ws/pair`，服务端生成配对码并在 `PENDING_PAIR_SUCC` 中返回。发起方先断开原连接，再连接 `/ws/pair?targetPairKey=<targetPairKey>&passcode=<passcode>`；`targetPairKey` 与前端生成的六码 `passcode` 均为必填查询参数，服务端据此通知目标设备确认。
 - PENDING_PAIR_SUCC：配对码已注册，`data.pairKey` 为服务端生成的配对码，界面可以展示并接受其他设备配对。
 - PAIR_STARTED：服务端已向目标设备发出配对请求，`data.passcode` 为前端生成并通过连接 URL 传入的验证码，发起方展示该验证码。

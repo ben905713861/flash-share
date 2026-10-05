@@ -1,21 +1,26 @@
 import {WebSocket} from 'ws';
 import fs from 'fs';
 import jwt from 'jsonwebtoken';
+import {randomUUID} from "crypto";
 
-const ROOM_KEY_TTL = '24h';
-const ROOM_KEY_PRIVATE_KEY = fs.readFileSync('cert/privkey.pem');
-const ROOM_KEY_PUBLIC_KEY = fs.readFileSync('cert/fullchain.pem');
+function readRoomSecret(): string {
+    const value = process.env.ROOM_KEY_SECRET;
+    if (!value) {
+        throw new Error('ROOM_KEY_SECRET environment variable is required');
+    }
+    return value;
+}
 
 export default class RoomService {
     #roomKey2roomMap: Map<string, Room> = new Map();
     #ws2roomMap: Map<WebSocket, Room> = new Map();
 
     createRoom(): string {
-        return jwt.sign(
-            {},
-            ROOM_KEY_PRIVATE_KEY,
-            { algorithm: 'ES256', expiresIn: ROOM_KEY_TTL }
-        );
+        return jwt.sign({}, readRoomSecret(), {
+            algorithm: "HS256",
+            expiresIn: "30d",
+            jwtid: randomUUID(),
+        });
     }
 
     joinRoom(roomKey: string, ws: WebSocket) {
@@ -43,13 +48,7 @@ export default class RoomService {
     }
 
     validateRoomKey(roomKey: string) {
-        try {
-            jwt.verify(roomKey, ROOM_KEY_PUBLIC_KEY, {
-                algorithms: ['ES256']
-            });
-        } catch {
-            throw new Error('Invalid or expired roomKey');
-        }
+        jwt.verify(roomKey, readRoomSecret(), { algorithms: ["HS256"] });
     }
 
     getRoomInfo(roomKey: string): Room {

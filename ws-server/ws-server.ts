@@ -1,3 +1,4 @@
+import { loadEnvFile } from "node:process";
 import {WebSocketServer, WebSocket, RawData} from 'ws';
 import https from "https";
 import fs from "fs";
@@ -6,6 +7,10 @@ import RoomService from "./room-service";
 import {PairService} from "./pair-service";
 import MessageRateService from "./message-rate-service";
 import * as http from "node:http";
+
+if (fs.existsSync('.env.local')) {
+  loadEnvFile('.env.local');
+}
 
 const PORT = 8787;
 const MAX_CONNECTIONS = 200;
