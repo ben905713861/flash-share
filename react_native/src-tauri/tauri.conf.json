@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "identifier": "com.wuxb.flashshare",
   "build": {
-    "frontendDist": "../build",
     "devUrl": "http://localhost:8082",
-    "beforeBuildCommand": "npx expo export --platform web"
+    "beforeDevCommand": "npm run tauri-web",
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm run tauri-web-build"
   },
   "app": {
     "windows": [

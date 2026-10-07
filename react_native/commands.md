@@ -31,7 +31,10 @@
 5. add env variables  
   `eas env:set --environment production`
 
-6. build Android APP  
+6. check env variables
+  `eas env:list --environment production`
+
+7. build Android APP  
   `eas build --platform android --profile production`
 
 
@@ -70,3 +73,17 @@
 4. start tauri  
   `npm run tauri-web`  
   `npm exec tauri dev`  
+
+## Build tauri project
+Plan 1:  
+1. build react native web project  
+  `npm run tauri-web-build`
+2. build tauri project
+  `npx tauri build`
+
+Plan 2:
+1. build react native web project and tauri  
+  `npm run tauri-build`
+
+find the release package in  
+  `src-tauri/target/release`

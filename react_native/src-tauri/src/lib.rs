@@ -1,7 +1,7 @@
 use std::{
   collections::HashMap,
   fs::{File, OpenOptions},
-  io::{Read, Seek, SeekFrom, Write},
+  io::{Write},
   path::PathBuf,
   sync::{Mutex, OnceLock},
 };
@@ -10,7 +10,6 @@ use serde::Serialize;
 use tauri::Manager;
 
 static RECEIVE_FILE_HANDLES: OnceLock<Mutex<HashMap<PathBuf, File>>> = OnceLock::new();
-const MAX_TRANSFER_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 #[derive(Serialize)]
 struct TransferFile {
