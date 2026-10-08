@@ -7,7 +7,11 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{
+  menu::{Menu, MenuItem},
+  tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+  Manager,
+};
 
 static RECEIVE_FILE_HANDLES: OnceLock<Mutex<HashMap<PathBuf, File>>> = OnceLock::new();
 
@@ -38,6 +42,46 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      let minimize = MenuItem::with_id(app, "minimize", "Minimize", true, None::<&str>)?;
+      let quit = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
+      let menu = Menu::with_items(app, &[&minimize, &quit])?;
+
+      let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window was not found".to_string())?;
+      let window_for_tray = main_window.clone();
+      let app_for_menu = app.handle().clone();
+
+      TrayIconBuilder::new()
+        .icon(app.default_window_icon().cloned().ok_or_else(|| {
+          "The default window icon is not configured".to_string()
+        })?)
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(move |_app, event| match event.id.as_ref() {
+          "minimize" => {
+            let _ = window_for_tray.minimize();
+          }
+          "quit" => {
+            app_for_menu.exit(0);
+          }
+          _ => {}
+        })
+        .on_tray_icon_event(move |_tray, event| {
+          if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+          } = event
+          {
+            let _ = main_window.show();
+            let _ = main_window.unminimize();
+            let _ = main_window.set_focus();
+          }
+        })
+        .build(app)?;
+
       Ok(())
     })
     .run(tauri::generate_context!())
