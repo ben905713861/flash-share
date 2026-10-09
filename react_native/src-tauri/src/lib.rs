@@ -24,7 +24,7 @@ struct TransferFile {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       pick_transfer_files,
       pick_receive_directory,
@@ -33,7 +33,18 @@ pub fn run() {
       append_receive_file,
       close_receive_file,
       delete_receive_file,
-    ])
+    ]);
+
+  #[cfg(not(any(target_os = "android", target_os = "ios")))]
+  let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    if let Some(window) = app.get_webview_window("main") {
+      let _ = window.show();
+      let _ = window.unminimize();
+      let _ = window.set_focus();
+    }
+  }));
+
+  builder
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -50,6 +61,14 @@ pub fn run() {
       let main_window = app
         .get_webview_window("main")
         .ok_or_else(|| "Main window was not found".to_string())?;
+      let window_for_close = main_window.clone();
+      main_window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+          api.prevent_close();
+          let _ = window_for_close.hide();
+        }
+      });
+
       let window_for_tray = main_window.clone();
       let app_for_menu = app.handle().clone();
 
