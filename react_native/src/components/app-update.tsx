@@ -16,6 +16,24 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [updateReady, setUpdateReady] = useState(false);
     const currentVersion = Constants.expoConfig?.version ?? "Unknown";
+    const canCheckForUpdates = !__DEV__ && Updates.isEnabled;
+
+    async function checkUpdate() {
+        try {
+            console.log('Updates enabled:', Updates.isEnabled);
+            console.log('Channel:', Updates.channel);
+            console.log('Runtime:', Updates.runtimeVersion);
+
+            const result = await Updates.checkForUpdateAsync();
+
+            setUpdateStatus(
+                result.isAvailable ? '发现新更新' : '当前没有新更新'
+            );
+        } catch (error) {
+            console.error('OTA 检查失败:', error);
+            setUpdateStatus('OTA 检查失败, ' + String(error));
+        }
+    }
 
     const downloadUpdate = async () => {
         setIsCheckingUpdate(true);
@@ -36,7 +54,7 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
     };
 
     const checkForUpdates = async () => {
-        if (!Updates.isEnabled || isCheckingUpdate) return;
+        if (!canCheckForUpdates || isCheckingUpdate) return;
         setIsCheckingUpdate(true);
         setUpdateReady(false);
         setUpdateStatus("Checking for updates...");
@@ -68,9 +86,9 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
             <View style={s.settingsPathActions}>
                 <Pressable
                     accessibilityRole="button"
-                    disabled={!Updates.isEnabled || isCheckingUpdate}
-                    style={[s.settingsPathButton, { borderColor: palette.border, opacity: !Updates.isEnabled || isCheckingUpdate ? 0.5 : 1 }]}
-                    onPress={() => void checkForUpdates()}
+                    disabled={!canCheckForUpdates || isCheckingUpdate}
+                    style={[s.settingsPathButton, { borderColor: palette.border, opacity: !canCheckForUpdates || isCheckingUpdate ? 0.5 : 1 }]}
+                    onPress={() => checkUpdate()}
                 >
                     <Text style={[s.settingsPathButtonText, { color: palette.text }]}>{isCheckingUpdate ? "Checking..." : "Check for updates"}</Text>
                 </Pressable>
@@ -82,7 +100,7 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
                 )}
             </View>
             <Text accessibilityLiveRegion="polite" style={[s.settingsPath, { color: palette.muted }]}>
-                {updateStatus}
+                {updateStatus || (!canCheckForUpdates ? "Updates are available in production builds only." : "")}
             </Text>
         </>
     );
