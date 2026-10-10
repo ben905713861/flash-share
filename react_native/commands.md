@@ -40,6 +40,9 @@
 8. push to Google Play console
   `eas submit --platform android`
 
+9. hot release
+  `eas update --channel production --message "your fix messgae"`
+
 # windows
 ## Init tauri project and start dev mode
 1. install tauri cli  
