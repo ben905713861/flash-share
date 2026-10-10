@@ -40,6 +40,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
     const showReceiveDirectory =
         Platform.OS !== "web" || (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window);
+    const showAppUpdates = Platform.OS === "ios" || Platform.OS === "android";
 
     const [receiveDirectoryUri, setReceiveDirectoryUri] = useState<string | undefined>(() => storage.get("receive-directory"));
     const [updateStatus, setUpdateStatus] = useState("");
@@ -146,28 +147,32 @@ export function SettingsModal({
                             );
                         })}
                     </View>
-                    <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
-                    <Text style={[s.settingsLabel, { color: palette.text }]}>App update</Text>
-                    <Text style={[s.settingsPath, { color: palette.muted }]}>Current version: {currentVersion}</Text>
-                    <View style={s.settingsPathActions}>
-                        <Pressable
-                            accessibilityRole="button"
-                            disabled={!Updates.isEnabled || isCheckingUpdate}
-                            style={[s.settingsPathButton, { borderColor: palette.border, opacity: !Updates.isEnabled || isCheckingUpdate ? 0.5 : 1 }]}
-                            onPress={() => void checkForUpdates()}
-                        >
-                            <Text style={[s.settingsPathButtonText, { color: palette.text }]}>{isCheckingUpdate ? "Checking..." : "Check for updates"}</Text>
-                        </Pressable>
-                        {isCheckingUpdate && <ActivityIndicator size="small" color="#2f6fed" />}
-                        {updateReady && (
-                            <Pressable style={[s.settingsPathButton, { borderColor: palette.border }]} onPress={() => void Updates.reloadAsync()}>
-                                <Text style={[s.settingsPathButtonText, { color: palette.text }]}>Restart now</Text>
-                            </Pressable>
-                        )}
-                    </View>
-                    <Text accessibilityLiveRegion="polite" style={[s.settingsPath, { color: palette.muted }]}>
-                        {updateStatus || (Updates.isEnabled ? "" : "Updates are available in installed builds only.")}
-                    </Text>
+                    {showAppUpdates && (
+                        <>
+                            <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
+                            <Text style={[s.settingsLabel, { color: palette.text }]}>App update</Text>
+                            <Text style={[s.settingsPath, { color: palette.muted }]}>Current version: {currentVersion}</Text>
+                            <View style={s.settingsPathActions}>
+                                <Pressable
+                                    accessibilityRole="button"
+                                    disabled={!Updates.isEnabled || isCheckingUpdate}
+                                    style={[s.settingsPathButton, { borderColor: palette.border, opacity: !Updates.isEnabled || isCheckingUpdate ? 0.5 : 1 }]}
+                                    onPress={() => void checkForUpdates()}
+                                >
+                                    <Text style={[s.settingsPathButtonText, { color: palette.text }]}>{isCheckingUpdate ? "Checking..." : "Check for updates"}</Text>
+                                </Pressable>
+                                {isCheckingUpdate && <ActivityIndicator size="small" color="#2f6fed" />}
+                                {updateReady && (
+                                    <Pressable style={[s.settingsPathButton, { borderColor: palette.border }]} onPress={() => void Updates.reloadAsync()}>
+                                        <Text style={[s.settingsPathButtonText, { color: palette.text }]}>Restart now</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                            <Text accessibilityLiveRegion="polite" style={[s.settingsPath, { color: palette.muted }]}>
+                                {updateStatus}
+                            </Text>
+                        </>
+                    )}
                     {showReceiveDirectory && (
                         <>
                             <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
