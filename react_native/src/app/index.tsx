@@ -17,6 +17,7 @@ import {TextWorkspace, TextWorkspaceRef} from "@/components/text-workspace";
 import {FileWorkspace, FileWorkspaceRef} from "@/components/file-workspace";
 import { SettingsModal } from "@/components/settings-modal";
 import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
+import { LogViewer } from "@/components/log-viewer";
 import { C, s } from "@/styles";
 import {pickTransferFiles} from "@/lib/file-transfer";
 
@@ -370,6 +371,7 @@ export default function App() {
                 }}
             />
             <AlertModal palette={palette} />
+            <LogViewer palette={palette} />
         </SafeAreaView>
     );
 }
