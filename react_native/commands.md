@@ -37,6 +37,8 @@
 7. build Android APP  
   `eas build --platform android --profile production`
 
+8. push to Google Play console
+  `eas submit --platform android`
 
 # windows
 ## Init tauri project and start dev mode

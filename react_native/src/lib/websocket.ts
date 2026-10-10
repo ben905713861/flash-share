@@ -98,12 +98,27 @@ export const createWebSocket = ({
     const restart = () => {
         clearReconnectTimer();
         const socket = ws;
-        ws = null;
-        if (socket) {
-            socket.onclose = null;
+        if (!socket) {
+            init();
+            return;
+        }
+
+        // The server still counts the old connection until its close event
+        // is processed. Wait for that event before opening the replacement.
+        const reconnect = () => {
+            if (ws === socket) {
+                ws = null;
+            }
+            if (!disposed) {
+                init();
+            }
+        };
+        if (socket.readyState === WebSocket.CLOSED) {
+            reconnect();
+        } else {
+            socket.onclose = reconnect;
             socket.close();
         }
-        init();
     };
 
     const dispose = () => {
