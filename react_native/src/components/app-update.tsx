@@ -98,7 +98,7 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
                     accessibilityRole="button"
                     disabled={!canCheckForUpdates || isCheckingUpdate}
                     style={[s.settingsPathButton, { borderColor: palette.border, opacity: !canCheckForUpdates || isCheckingUpdate ? 0.5 : 1 }]}
-                    onPress={() => checkForOTAUpdate()}
+                    onPress={() => checkForUpdates()}
                 >
                     <Text style={[s.settingsPathButtonText, { color: palette.text }]}>{isCheckingUpdate ? "Checking..." : "Check for updates"}</Text>
                 </Pressable>
