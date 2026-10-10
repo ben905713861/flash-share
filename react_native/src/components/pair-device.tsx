@@ -18,6 +18,11 @@ export function PairDevice({
     onTargetPairKeyChange,
     onPair,
 }: PairDeviceProps) {
+    const handlePair = (value: string) => {
+        onPair(value);
+        onTargetPairKeyChange("");
+    };
+
     return (
         <View style={[s.card, { backgroundColor: palette.card, borderColor: palette.border }]}>
             <Text style={[s.heading, { color: palette.text }]}>Pair a device!</Text>
@@ -39,11 +44,10 @@ export function PairDevice({
                     style={[s.input, { color: palette.text }]}
                 />
                 <PairingCodeScanner onScanned={(code) => {
-                    onTargetPairKeyChange(code);
-                    onPair(code);
+                    handlePair(code);
                 }} />
             </View>
-            <Pressable style={s.primary} onPress={() => onPair(targetPairKey)}>
+            <Pressable style={s.primary} onPress={() => handlePair(targetPairKey)}>
                 <Text style={s.primaryText}>Pair</Text>
             </Pressable>
         </View>
