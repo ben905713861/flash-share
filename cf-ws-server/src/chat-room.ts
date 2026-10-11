@@ -9,6 +9,7 @@ type ChatAttachment = {
 	windowStartedAt: number;
 	messageCount: number;
 	isOfferer: boolean;
+	deviceId: string;
 };
 
 function sendMsg(ws: WebSocket, type: string, data?: unknown) {
@@ -31,9 +32,14 @@ export class ChatRoom extends DurableObject<Env> {
 		if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
 			return new Response("Expected WebSocket", { status: 426 });
 		}
-		const roomKey = new URL(request.url).searchParams.get("roomKey");
+		const requestUrl = new URL(request.url);
+		const roomKey = requestUrl.searchParams.get("roomKey");
+		const deviceId = requestUrl.searchParams.get("deviceId");
 		if (!roomKey) {
 			return this.wsReturnError("roomKey is empty");
+		}
+		if (!deviceId) {
+			return this.wsReturnError("deviceId is empty");
 		}
 		try {
 			verifyRoomKey(roomKey, this.env.ROOM_KEY_SECRET);
@@ -42,9 +48,25 @@ export class ChatRoom extends DurableObject<Env> {
 		}
 
 		return this.state.blockConcurrencyWhile(async () => {
-			const wsList = this.state.getWebSockets()
-				.filter(ws => ws.readyState === WebSocket.OPEN);
-			if (wsList.length >= 2) {
+			const allWs = this.state.getWebSockets();
+			const replacedWs = allWs.filter(ws =>
+				this.getAttachment(ws)?.deviceId === deviceId
+			);
+			const otherDeviceIds = new Set(
+				allWs
+					.map(ws => this.getAttachment(ws))
+					.filter(attachment => attachment !== null)
+					.map(attachment => attachment.deviceId)
+					.filter(id => id !== deviceId),
+			);
+			const isOfferer = replacedWs
+				.map(ws => this.getAttachment(ws))
+				.find(attachment => attachment !== null)
+				?.isOfferer
+				?? otherDeviceIds.size === 0;
+
+			replacedWs.forEach(ws => ws.close(1000, "replaced by reconnect"));
+			if (otherDeviceIds.size >= 2) {
 				return this.wsReturnError("room is full");
 			}
 
@@ -54,17 +76,33 @@ export class ChatRoom extends DurableObject<Env> {
 			server.serializeAttachment({
 				windowStartedAt: Date.now(),
 				messageCount: 0,
-				isOfferer: wsList.length === 0,
+				isOfferer,
+				deviceId,
 			} satisfies ChatAttachment);
 
-			this.joinRoom();
+			this.joinRoom(server);
 			return new Response(null, { status: 101, webSocket: client });
 		});
 	}
 
-	private joinRoom() {
-		const wsList = this.state.getWebSockets()
-			.filter(ws => ws.readyState === WebSocket.OPEN);
+	private joinRoom(currentWs: WebSocket) {
+		const wsByDevice = new Map<string, WebSocket>();
+		for (const ws of this.state.getWebSockets()) {
+			if (ws.readyState !== WebSocket.OPEN) {
+				continue;
+			}
+			const deviceId = this.getAttachment(ws)?.deviceId;
+			if (!deviceId || wsByDevice.has(deviceId)) {
+				continue;
+			}
+			wsByDevice.set(deviceId, ws);
+		}
+
+		const currentDeviceId = this.getAttachment(currentWs)?.deviceId;
+		if (currentDeviceId) {
+			wsByDevice.set(currentDeviceId, currentWs);
+		}
+		const wsList = [...wsByDevice.values()];
 		if (wsList.length === 1) {
 			sendMsg(wsList[0], "JOIN_ROOM_WAIT");
 		} else {
@@ -84,7 +122,11 @@ export class ChatRoom extends DurableObject<Env> {
 
 		const now = Date.now();
 		const attachment = this.getAttachment(ws);
-		const rate = attachment ?? { windowStartedAt: now, messageCount: 0 };
+		if (!attachment) {
+			ws.close(1008, "missing connection attachment");
+			return;
+		}
+		const rate = attachment;
 		if (now - rate.windowStartedAt >= MESSAGE_RATE_WINDOW_MS) {
 			rate.windowStartedAt = now;
 			rate.messageCount = 0;
@@ -108,8 +150,16 @@ export class ChatRoom extends DurableObject<Env> {
 
 	async webSocketClose(_ws: WebSocket) {
 		await this.state.blockConcurrencyWhile(async () => {
-			const wsList = this.state.getWebSockets()
-				.filter(ws => ws.readyState === WebSocket.OPEN);
+			const wsByDevice = new Map<string, WebSocket>();
+			this.state.getWebSockets()
+				.filter(ws => ws.readyState === WebSocket.OPEN)
+				.forEach((ws) => {
+					const deviceId = this.getAttachment(ws)?.deviceId;
+					if (deviceId && !wsByDevice.has(deviceId)) {
+						wsByDevice.set(deviceId, ws);
+					}
+				});
+			const wsList = [...wsByDevice.values()];
 			if (wsList.length !== 1) {
 				return;
 			}
@@ -118,10 +168,14 @@ export class ChatRoom extends DurableObject<Env> {
 			// over so the next join can establish a new WebRTC offer.
 			const remainingWs = wsList[0];
 			const attachment = this.getAttachment(remainingWs);
+			if (!attachment) {
+				return;
+			}
 			remainingWs.serializeAttachment({
-				windowStartedAt: attachment?.windowStartedAt ?? Date.now(),
-				messageCount: attachment?.messageCount ?? 0,
+				windowStartedAt: attachment.windowStartedAt,
+				messageCount: attachment.messageCount,
 				isOfferer: true,
+				deviceId: attachment.deviceId,
 			} satisfies ChatAttachment);
 		});
 	}

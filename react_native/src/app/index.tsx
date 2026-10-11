@@ -20,11 +20,13 @@ import { AlertModal, showAlert, showConfirm } from "@/components/alert-modal";
 import { LogViewer } from "@/components/log-viewer";
 import { C, s } from "@/styles";
 import {pickTransferFiles} from "@/lib/file-transfer";
+import {getDeviceId} from "@/lib/device-id";
 
 
 const THEME_STORAGE_KEY = "flash-share-theme";
 
 export default function App() {
+    const deviceId = getDeviceId();
     const colorScheme = useColorScheme();
     const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
         const saved = storage.get(THEME_STORAGE_KEY);
@@ -173,7 +175,7 @@ export default function App() {
             roomWebSocket?.dispose();
             roomWebSocket = createWebSocket({
                 type: "room",
-                attachData: { roomKey },
+                attachData: { roomKey, deviceId },
                 onClose: (event) => {
                     if (event.code === 1008 || event.code === 1013) {
                         showAlert("Error", event.reason);
