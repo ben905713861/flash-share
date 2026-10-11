@@ -51,9 +51,14 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
                 return;
             }
             setUpdateStatus("Update available.");
+            const availableUpdateDate = "createdAt" in result.manifest
+                ? new Date(result.manifest.createdAt).toLocaleString()
+                : undefined;
+            const availableUpdateId = result.manifest.id;
+            const availableUpdate = `${availableUpdateDate ?? ""} - ${availableUpdateId?.slice(0, 8) ?? ""}`;
             showConfirm(
-                "Update available",
-                "A new version is available. Download and install it now?",
+                "JS update available",
+                `A new JS update is available for App version ${currentVersion}.\n\nUpdate: ${availableUpdate}\n\nDownload and install it now?`,
                 () => void downloadUpdate(),
                 () => setUpdateStatus("Update postponed."),
             );
