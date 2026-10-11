@@ -16,6 +16,9 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [updateReady, setUpdateReady] = useState(false);
     const currentVersion = Constants.expoConfig?.version ?? "Unknown";
+    const updateId = Updates.updateId;
+    const updateDate = Updates.createdAt?.toLocaleString();
+    const currentUpdate = `${updateDate ?? ""} - ${updateId?.slice(0, 8) ?? ""}`;
     const canCheckForUpdates = !__DEV__ && Updates.isEnabled;
 
     const downloadUpdate = async () => {
@@ -66,6 +69,7 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
             <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
             <Text style={[s.settingsLabel, { color: palette.text }]}>App update</Text>
             <Text style={[s.settingsPath, { color: palette.muted }]}>Current version: {currentVersion}</Text>
+            <Text style={[s.settingsPath, { color: palette.muted }]}>JS update: {currentUpdate}</Text>
             <View style={s.settingsPathActions}>
                 <Pressable
                     accessibilityRole="button"
