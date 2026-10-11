@@ -18,33 +18,6 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const currentVersion = Constants.expoConfig?.version ?? "Unknown";
     const canCheckForUpdates = !__DEV__ && Updates.isEnabled;
 
-    async function checkForOTAUpdate() {
-        console.log("checkForOTAUpdate", {
-            __DEV__,
-            isEnabled: Updates.isEnabled,
-            updateId: Updates.updateId,
-            runtimeVersion: Updates.runtimeVersion,
-            channel: Updates.channel,
-        });
-
-        if (__DEV__) {
-            console.log('当前为开发模式，跳过 OTA 检查');
-            return;
-        }
-
-        if (!Updates.isEnabled) {
-            console.log('expo-updates 未启用');
-            return;
-        }
-
-        try {
-            const result = await Updates.checkForUpdateAsync();
-            console.log('OTA 检查结果:', result);
-        } catch (error) {
-            console.error('OTA 检查失败:', error);
-        }
-    }
-
     const downloadUpdate = async () => {
         setIsCheckingUpdate(true);
         setUpdateStatus("Downloading update...");
