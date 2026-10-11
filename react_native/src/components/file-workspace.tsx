@@ -12,6 +12,7 @@ import {
     deleteFile,
     finalizeReceiveFile,
     getFileSize,
+    getReceiveDirectoryUri,
     openFileForReading,
     pickReceiveDirectory,
     readFileChunk,
@@ -21,8 +22,8 @@ import {
     type ReceiveFile,
     type TransferFile,
 } from "@/lib/file-transfer";
-import {showAlert} from "@/components/alert-modal";
-import storage from "@/lib/storage";
+import {showAlert, showConfirm} from "@/components/alert-modal";
+import { getFileSaveLocation, setFileSaveLocation, supportsFileSaveLocation } from "@/components/file-save-location";
 import {FileDropZone} from "@/components/file-drop-zone";
 
 const FILE_CHUNK_SIZE = 256 * 1024;
@@ -461,7 +462,7 @@ export function FileWorkspace({
     };
 
     const acceptFiles = async () => {
-        const receiveDirectoryUri = storage.get("receive-directory");
+        const receiveDirectoryUri = getFileSaveLocation();
         try {
             dirPickerRef.current = receiveDirectoryUri
                 ? restoreReceiveDirectory(receiveDirectoryUri)
@@ -469,6 +470,17 @@ export function FileWorkspace({
             updateFileTransferStatus("queued");
             fileChannelSend({ type: "file-request-ack" });
             setReceiveDialogOpen(false);
+            if (supportsFileSaveLocation() && !receiveDirectoryUri && !getFileSaveLocation()) {
+                const selectedDirectoryUri = getReceiveDirectoryUri(dirPickerRef.current);
+                if (selectedDirectoryUri) {
+                    showConfirm(
+                        "Remember file save location?",
+                        `Use this folder to receive files in the future?\n${selectedDirectoryUri}`,
+                        () => setFileSaveLocation(selectedDirectoryUri),
+                        () => {},
+                    );
+                }
+            }
         } catch (e) {
             console.info("user rejected pickReceiveDirectory.", e);
         }

@@ -62,7 +62,7 @@ export const restoreReceiveDirectory = (uri: string): ReceiveDirectory => {
 export type ReceiveFile = File;
 
 export const pickReceiveDirectory = async () => {
-    await Directory.pickDirectoryAsync();
+    return await Directory.pickDirectoryAsync();
 };
 
 export const createReceiveFile = async (directory: ReceiveDirectory, filename: string): Promise<ReceiveFile> => {
