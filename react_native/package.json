@@ -44,7 +44,8 @@
     "@tauri-apps/cli": "^2.11.4",
     "@types/react": "~19.2.2",
     "cross-env": "^10.1.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "dotenv-cli": "^11.0.0"
   },
   "scripts": {
     "start": "expo start",
@@ -52,7 +53,7 @@
     "ios": "expo run:ios",
     "web": "cross-env BROWSER=none expo start --web --port 8081",
     "tauri-web": "cross-env APP_WEB_VARIANT=tauri BROWSER=none expo start --web --port 8082",
-    "tauri-web-build": "cross-env EXPO_NO_DOTENV=1 APP_WEB_VARIANT=tauri dotenv run -f .env.production -- expo export --platform web --clear",
+    "tauri-web-build": "cross-env EXPO_NO_DOTENV=1 APP_WEB_VARIANT=tauri dotenv -e .env.production -- expo export --platform web --clear",
     "tauri-dev": "tauri dev",
     "tauri-build": "tauri build --no-bundle",
     "lint": "expo lint"
