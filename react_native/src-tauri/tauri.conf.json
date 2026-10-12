@@ -29,6 +29,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -39,6 +40,14 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdDQ0JBOTIzM0Y1NjAwQUIKUldTckFGWS9JNm5MZkJ2bVkrWHlYQllyRjNEcmc0SHhJYjExQnA0ZEM0N3hlNXhQZk9QYXhwSUsK",
+      "endpoints": [
+        "https://github.com/ben905713861/flash-share/releases/latest/download/latest.json"
+      ]
     }
   }
 }

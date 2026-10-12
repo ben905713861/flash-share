@@ -32,6 +32,12 @@ In the output, you'll find options to open the app in a
 
 The app uses Expo Router file-based routing. The main screen is in `src/app/index.tsx`.
 
+### Tauri desktop updates
+
+Tauri release bundles include signed updater artifacts. Keep the private signing key in `react_native/.tauri/` or provide it through `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; never commit it. The public key and updater endpoint are configured in `src-tauri/tauri.conf.json`.
+
+Build a release with `npm run tauri-build` after setting the signing environment variables. Publish the generated `latest.json` and platform installer artifacts at the configured endpoint. Desktop clients check for updates when the app starts, install an available update, and relaunch automatically.
+
 ### Other setup steps
 
 - To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)

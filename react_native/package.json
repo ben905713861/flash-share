@@ -6,6 +6,8 @@
     "@config-plugins/react-native-webrtc": "^15.0.2",
     "@expo/ui": "~57.0.22",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-process": "^2.3.0",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "expo": "~57.0.27",
     "expo-camera": "~57.0.4",
     "expo-constants": "~57.0.21",
@@ -44,8 +46,8 @@
     "@tauri-apps/cli": "^2.11.4",
     "@types/react": "~19.2.2",
     "cross-env": "^10.1.0",
-    "typescript": "~6.0.3",
-    "dotenv-cli": "^11.0.0"
+    "dotenv-cli": "^11.0.0",
+    "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
