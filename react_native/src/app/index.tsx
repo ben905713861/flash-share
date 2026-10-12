@@ -21,6 +21,7 @@ import { LogViewer } from "@/components/log-viewer";
 import { C, s } from "@/styles";
 import {pickTransferFiles} from "@/lib/file-transfer";
 import {getDeviceId} from "@/lib/device-id";
+import {subscribeToAppResume} from "@/lib/app-resume";
 
 
 const THEME_STORAGE_KEY = "flash-share-theme";
@@ -220,11 +221,44 @@ export default function App() {
         exitSignalRef.current = () => sendRoomSignal("EXIT");
         disconnectRef.current = () => {
             webRTC?.dispose();
+            webRTC = undefined;
+            webRTCRef.current = null;
             pairWebSocket?.dispose();
             pairWebSocket = undefined;
             roomWebSocket?.dispose();
             roomWebSocket = undefined;
         };
+
+        const checkConnectionsOnResume = () => {
+            if (roomWebSocket) {
+                if (!webRTC) {
+                    if (!roomWebSocket.isOpen()) {
+                        roomWebSocket.restart();
+                        console.log("resume, restart roomWebSocket while waiting");
+                    } else {
+                        console.log("resume, roomWebSocket is healthy while waiting");
+                    }
+                    return;
+                }
+                if (webRTC.isConnectionHealthy()) {
+                    console.log("resume, connections are healthy");
+                    return;
+                }
+                webRTC?.dispose();
+                webRTC = undefined;
+                webRTCRef.current = null;
+                // Rejoining the room causes the normal JOIN_ROOM_SUCC/SDP flow
+                // to rebuild an unhealthy peer connection.
+                roomWebSocket.restart();
+                console.log("resume, restart roomWebSocket");
+            } else if (pairWebSocket) {
+                if (!pairWebSocket.isOpen()) {
+                    pairWebSocket.restart();
+                    console.log("resume, restart pairWebSocket");
+                }
+            }
+        };
+        const unsubscribeFromResume = subscribeToAppResume(checkConnectionsOnResume);
 
 
         pairRef.current = (targetKey) => {
@@ -243,6 +277,7 @@ export default function App() {
             createPairWs();
         }
         return () => {
+            unsubscribeFromResume();
             disconnectRef.current();
         };
     }, [connectionSession]); // empty array: only execute 1 time when load the page

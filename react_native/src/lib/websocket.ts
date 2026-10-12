@@ -96,10 +96,13 @@ export const createWebSocket = ({
         return false;
     };
 
+    const isOpen = (): boolean => ws?.readyState === WebSocket.OPEN;
+
     const restart = () => {
         clearReconnectTimer();
         const socket = ws;
         if (!socket) {
+            console.log("init ws");
             init();
             return;
         }
@@ -115,8 +118,10 @@ export const createWebSocket = ({
             }
         };
         if (socket.readyState === WebSocket.CLOSED) {
+            console.log("WebSocket closed, reconnect");
             reconnect();
         } else {
+            console.log("WebSocket closed, reconnect");
             socket.onclose = reconnect;
             socket.close();
         }
@@ -134,5 +139,5 @@ export const createWebSocket = ({
     };
 
     init();
-    return { send, restart, dispose };
+    return { send, restart, dispose, isOpen };
 };
