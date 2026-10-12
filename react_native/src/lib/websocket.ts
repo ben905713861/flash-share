@@ -1,3 +1,4 @@
+const WS_RECONNECT_TIMEOUT = 5000;
 const WS_HOST = process.env.EXPO_PUBLIC_WS_URL?.replace(/\/$/, "");
 
 if (!WS_HOST) {
@@ -36,7 +37,7 @@ export const createWebSocket = ({
         wsReconnectTimer = globalThis.setTimeout(() => {
             wsReconnectTimer = undefined;
             init();
-        }, 5000);
+        }, WS_RECONNECT_TIMEOUT);
     };
 
     const init = () => {

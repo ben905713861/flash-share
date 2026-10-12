@@ -2,6 +2,7 @@
 import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
 
 const HEART_BEAT_INTERVAL = 5000;
+const WEBRTC_RECONNECT_TIMEOUT = 10000;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 type RTCDataChannel = ReturnType<RTCPeerConnection["createDataChannel"]>;
@@ -210,7 +211,7 @@ export const createWebRTC = ({
                         console.log("onRestartPeerConnection");
                         onRestartPeerConnection();
                     }
-                }, 60000);
+                }, WEBRTC_RECONNECT_TIMEOUT);
             } else if (currentPeer.iceConnectionState === "failed") {
                 restartPeerConnection();
                 onRestartPeerConnection();
