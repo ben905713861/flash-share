@@ -35,6 +35,7 @@ export const createWebRTC = ({
     let heartBeatChannel: RTCDataChannel | null = null;
     let heartBeatInterval: ReturnType<typeof setInterval> | undefined;
     let iceDisconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let isRestarting = false;
     let canAddIceCandidate = false;
     let lastPingAt = Date.now();
     let lastPongAt = Date.now();
@@ -140,6 +141,10 @@ export const createWebRTC = ({
     };
 
     const restartPeerConnection = () => {
+        if (isRestarting) {
+            return;
+        }
+        isRestarting = true;
         console.log("restartPeerConnection");
         globalThis.clearTimeout(iceDisconnectTimer);
         globalThis.clearInterval(heartBeatInterval);
@@ -153,20 +158,22 @@ export const createWebRTC = ({
         canAddIceCandidate = false;
         iceBuffer.length = 0;
         init();
+        isRestarting = false;
     };
 
     const init = () => {
-        peer = new RTCPeerConnection({
+        const currentPeer = new RTCPeerConnection({
             iceServers: [
                 {urls: "stun:stun.l.google.com:19302"},
             ],
         });
-        peer.onicecandidate = (event: any) => {
+        peer = currentPeer;
+        currentPeer.onicecandidate = (event: any) => {
             if (event.candidate) {
                 sendSignal("ICE", event.candidate.toJSON());
             }
         };
-        peer.ondatachannel = (event: any) => {
+        currentPeer.ondatachannel = (event: any) => {
             if (event.channel.label === "chat") {
                 dataChannel = event.channel;
                 dataChannelInit();
@@ -180,31 +187,30 @@ export const createWebRTC = ({
                 heartBeatChannelInit();
             }
         };
-        peer.oniceconnectionstatechange = () => {
-            if (!peer) {
+        currentPeer.oniceconnectionstatechange = () => {
+            if (peer !== currentPeer) {
                 return;
             }
-            onPeerConnectionState(peer.iceConnectionState);
-            if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
+            onPeerConnectionState(currentPeer.iceConnectionState);
+            if (currentPeer.iceConnectionState === "connected" || currentPeer.iceConnectionState === "completed") {
                 globalThis.clearTimeout(iceDisconnectTimer);
                 console.log("connected", "Secure peer-to-peer connection active");
                 console.log("Devices connected directly");
-            } else if (peer.iceConnectionState === "disconnected") {
+            } else if (currentPeer.iceConnectionState === "disconnected") {
                 console.log("iceConnectionState=", "disconnected");
                 iceDisconnectTimer = globalThis.setTimeout(() => {
-                    if (peer?.iceConnectionState === "disconnected" || peer?.iceConnectionState === "failed") {
+                    if (peer === currentPeer && (currentPeer.iceConnectionState === "disconnected" || currentPeer.iceConnectionState === "failed")) {
                         restartPeerConnection();
                         console.log("onRestartPeerConnection");
                         onRestartPeerConnection();
                     }
                 }, 60000);
-            } else if (peer.iceConnectionState === "failed") {
+            } else if (currentPeer.iceConnectionState === "failed") {
                 restartPeerConnection();
                 onRestartPeerConnection();
             }
         };
     };
-
     const textChannelSend = (message: string): boolean => {
         if (dataChannel?.readyState !== "open") {
             console.log("error", "Connect a device before sending a message");
