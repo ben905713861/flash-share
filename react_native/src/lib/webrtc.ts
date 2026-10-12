@@ -152,9 +152,15 @@ export const createWebRTC = ({
         dataChannel?.close();
         fileChannel?.close();
         heartBeatChannel?.close();
-        peer?.close();
-        dataChannel = fileChannel = heartBeatChannel = null;
+        const previousPeer = peer;
         peer = null;
+        if (previousPeer) {
+            previousPeer.onicecandidate = null;
+            previousPeer.ondatachannel = null;
+            previousPeer.oniceconnectionstatechange = null;
+            previousPeer.close();
+        }
+        dataChannel = fileChannel = heartBeatChannel = null;
         canAddIceCandidate = false;
         iceBuffer.length = 0;
         init();
