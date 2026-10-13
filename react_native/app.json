@@ -2,7 +2,7 @@
   "expo": {
     "name": "Flash Share",
     "slug": "flash-share",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "description": "Pair devices and share text or files directly, without uploading them to a central service.",
     "orientation": "portrait",
     "icon": "./assets/images/flash-share-icon.png",
