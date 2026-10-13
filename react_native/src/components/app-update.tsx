@@ -1,8 +1,10 @@
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { useState } from "react";
+import type { Update } from "@tauri-apps/plugin-updater";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
 import { showConfirm } from "@/components/alert-modal";
+import { findTauriUpdate, installTauriUpdate, isTauriEnvironment } from "@/lib/tauri-updater";
 import { s } from "@/styles";
 
 type AppUpdatePalette = {
@@ -12,6 +14,75 @@ type AppUpdatePalette = {
 };
 
 export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
+    const isTauri = isTauriEnvironment();
+    if (isTauri) return <TauriAppUpdate palette={palette} />;
+
+    return <ExpoAppUpdate palette={palette} />;
+}
+
+function TauriAppUpdate({ palette }: { palette: AppUpdatePalette }) {
+    const [updateStatus, setUpdateStatus] = useState("");
+    const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+    const currentVersion = Constants.expoConfig?.version ?? "Unknown";
+
+    const checkForUpdates = async () => {
+        if (isCheckingUpdate) return;
+        setIsCheckingUpdate(true);
+        setUpdateStatus("Checking for updates...");
+        try {
+            const update = await findTauriUpdate();
+            if (!update) {
+                setUpdateStatus("You are up to date.");
+                return;
+            }
+
+            setUpdateStatus(`Update ${update.version} is available.`);
+            showConfirm(
+                "Desktop update available",
+                `A new version (${update.version}) is available. Download and install it now?`,
+                () => void installUpdate(update),
+                () => setUpdateStatus("Update postponed."),
+            );
+        } catch (error) {
+            setUpdateStatus(error instanceof Error ? `Update failed: ${error.message}` : "Unable to check for updates.");
+        } finally {
+            setIsCheckingUpdate(false);
+        }
+    };
+
+    const installUpdate = async (update: Update) => {
+        setIsCheckingUpdate(true);
+        setUpdateStatus("Downloading and installing update...");
+        try {
+            await installTauriUpdate(update);
+        } catch (error) {
+            setIsCheckingUpdate(false);
+            setUpdateStatus(error instanceof Error ? `Update failed: ${error.message}` : "Unable to install update.");
+        }
+    };
+
+    return (
+        <>
+            <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
+            <Text style={[s.settingsLabel, { color: palette.text }]}>App update</Text>
+            <Text style={[s.settingsPath, { color: palette.muted }]}>Current version: {currentVersion}</Text>
+            <View style={s.settingsPathActions}>
+                <Pressable
+                    accessibilityRole="button"
+                    disabled={isCheckingUpdate}
+                    style={[s.settingsPathButton, { borderColor: palette.border, opacity: isCheckingUpdate ? 0.5 : 1 }]}
+                    onPress={() => void checkForUpdates()}
+                >
+                    <Text style={[s.settingsPathButtonText, { color: palette.text }]}>{isCheckingUpdate ? "Updating..." : "Check for updates"}</Text>
+                </Pressable>
+                {isCheckingUpdate && <ActivityIndicator size="small" color="#2f6fed" />}
+            </View>
+            <Text accessibilityLiveRegion="polite" style={[s.settingsPath, { color: palette.muted }]}>{updateStatus}</Text>
+        </>
+    );
+}
+
+function ExpoAppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [updateStatus, setUpdateStatus] = useState("");
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [updateReady, setUpdateReady] = useState(false);
@@ -98,4 +169,4 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
     );
 }
 
-export const shouldShowAppUpdate = Platform.OS === "ios" || Platform.OS === "android";
+export const shouldShowAppUpdate = Platform.OS === "ios" || Platform.OS === "android" || isTauriEnvironment();

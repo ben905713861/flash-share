@@ -59,7 +59,7 @@
     "tauri-web": "cross-env APP_WEB_VARIANT=tauri BROWSER=none expo start --web --port 8082",
     "tauri-web-build": "cross-env EXPO_NO_DOTENV=1 APP_WEB_VARIANT=tauri dotenv -e .env.production -- expo export --platform web --clear",
     "tauri-dev": "tauri dev",
-    "tauri-build": "tauri build --no-bundle",
+    "tauri-build": "tauri build",
     "lint": "expo lint"
   },
   "private": true,

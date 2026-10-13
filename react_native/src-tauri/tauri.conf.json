@@ -44,7 +44,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdDQ0JBOTIzM0Y1NjAwQUIKUldTckFGWS9JNm5MZkJ2bVkrWHlYQllyRjNEcmc0SHhJYjExQnA0ZEM0N3hlNXhQZk9QYXhwSUsK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGMERDNTMwMjNDMjdGNEUKUldST2Y4SWpNTVVOYjlHWnZQSjhISUcrZ0ZBR2VVWUFhd242TnkxQlBpTzVxU3B0ak1LWVhUSW0K",
       "endpoints": [
         "https://github.com/ben905713861/flash-share/releases/latest/download/latest.json"
       ]
