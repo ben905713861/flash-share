@@ -339,6 +339,8 @@ export const s = StyleSheet.create({
   settingsPathActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   settingsPathButton: { minHeight: 40, borderWidth: 1, borderRadius: 8, justifyContent: "center", paddingHorizontal: 12 },
   settingsPathButtonText: { fontWeight: "600" },
+  settingsTimeoutRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  settingsTimeoutInput: { width: 110, minHeight: 38, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, textAlign: "right" },
   settingsClear: { minHeight: 40, justifyContent: "center", paddingHorizontal: 4 },
   settingsClearText: { color: "#d9534f", fontWeight: "600" },
   settingsLogout: {

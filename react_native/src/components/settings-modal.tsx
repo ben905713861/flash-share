@@ -3,7 +3,7 @@ import type { ThemePreference } from "@/lib/theme";
 import { s } from "@/styles";
 import { FileSaveLocation } from "@/components/file-save-location";
 import { AppUpdate, shouldShowAppUpdate } from "@/components/app-update";
-
+import { ConnectionSettings } from "@/components/connection-settings";
 type SettingsPalette = {
     card: string;
     text: string;
@@ -62,6 +62,7 @@ export function SettingsModal({
                             );
                         })}
                     </View>
+                    <ConnectionSettings palette={palette} />
                     {shouldShowAppUpdate && <AppUpdate palette={palette} />}
                     <FileSaveLocation visible={visible} palette={palette} />
                     <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />

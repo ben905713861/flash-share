@@ -1,8 +1,7 @@
 
 import {RTCIceCandidate, RTCPeerConnection, RTCSessionDescription} from "./rtc";
+import { getHeartbeatInterval, getWebrtcReconnectTimeout } from "@/components/connection-settings";
 
-const HEART_BEAT_INTERVAL = 5000;
-const WEBRTC_RECONNECT_TIMEOUT = 10000;
 const FILE_BUFFER_LOW_WATER_MARK = 1 * 1024 * 1024;
 
 type RTCDataChannel = ReturnType<RTCPeerConnection["createDataChannel"]>;
@@ -56,7 +55,7 @@ export const createWebRTC = ({
         }
         heartBeatInterval = globalThis.setInterval(() => {
             sendHeartBeat();
-        }, HEART_BEAT_INTERVAL);
+        }, getHeartbeatInterval());
     };
 
     const sendHeartBeat = () => {
@@ -211,7 +210,7 @@ export const createWebRTC = ({
                         console.log("onRestartPeerConnection");
                         onRestartPeerConnection();
                     }
-                }, WEBRTC_RECONNECT_TIMEOUT);
+                }, getWebrtcReconnectTimeout());
             } else if (currentPeer.iceConnectionState === "failed") {
                 restartPeerConnection();
                 onRestartPeerConnection();
