@@ -61,6 +61,7 @@
     "tauri-dev": "tauri dev",
     "tauri-build": "tauri build",
     "tauri": "tauri",
+    "prepare": "node scripts/install-git-hooks.mjs",
     "lint": "expo lint"
   },
   "private": true,
