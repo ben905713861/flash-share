@@ -2,7 +2,6 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native
 import { useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import * as Updates from "expo-updates";
-import Constants from "expo-constants";
 import { showConfirm } from "@/components/alert-modal";
 import { findTauriUpdate, installTauriUpdate, isTauriEnvironment } from "@/lib/tauri-updater";
 import { s } from "@/styles";
@@ -23,7 +22,7 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
 function TauriAppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [updateStatus, setUpdateStatus] = useState("");
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-    const currentVersion = Constants.expoConfig?.version ?? "Unknown";
+    const currentVersion = Updates.runtimeVersion ?? "Unknown";
 
     const checkForUpdates = async () => {
         if (isCheckingUpdate) return;
@@ -86,7 +85,7 @@ function ExpoAppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [updateStatus, setUpdateStatus] = useState("");
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [updateReady, setUpdateReady] = useState(false);
-    const currentVersion = Constants.expoConfig?.version ?? "Unknown";
+    const currentVersion = Updates.runtimeVersion ?? "Unknown";
     const updateId = Updates.updateId;
     const updateDate = Updates.createdAt?.toLocaleString();
     const currentUpdate = `${updateDate ?? ""} - ${updateId?.slice(0, 8) ?? ""}`;
