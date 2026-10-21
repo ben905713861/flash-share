@@ -52,5 +52,7 @@ export function FileDropZone({children, style, disabled, onFilesSelected}: FileD
         resetShareIntent(true);
     }, [disabled, hasShareIntent, shareIntent.files, resetShareIntent]);
 
-    return <Pressable style={style} disabled={disabled} onPress={() => void selectFiles()}>{children}</Pressable>;
+    return <Pressable style={style} disabled={disabled} onPress={() => void selectFiles()}>
+        {children}
+    </Pressable>;
 }
