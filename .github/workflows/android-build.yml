@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'src/**'
-      - 'assets/**'
-      - 'app.json'
-      - 'app.config.js'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'plugins/**'
+      - 'react_native/src/**'
+      - 'react_native/assets/**'
+      - 'react_native/app.json'
+      - 'react_native/app.config.js'
+      - 'react_native/package.json'
+      - 'react_native/package-lock.json'
+      - 'react_native/plugins/**'
       - '.github/workflows/android-build.yml'
 
 permissions:
@@ -30,6 +30,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: react_native/package-lock.json
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -41,25 +42,27 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install JavaScript dependencies
+        working-directory: react_native
         run: npm ci
 
       - name: Generate Android project
+        working-directory: react_native
         run: npx expo prebuild --platform android --no-install
 
       - name: Build arm64 APK and AAB
-        working-directory: android
+        working-directory: react_native/android
         run: ./gradlew assembleRelease bundleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: flash-share-android-arm64-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: react_native/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: flash-share-android-arm64-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: react_native/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
