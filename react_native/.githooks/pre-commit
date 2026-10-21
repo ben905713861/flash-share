@@ -1,2 +1,2 @@
 #!/bin/sh
-node "$(git rev-parse --show-toplevel)/react_native/scripts/bump-tauri-version.mjs"
+node "$(git rev-parse --show-toplevel)/react_native/scripts/bump-app-version.mjs"
