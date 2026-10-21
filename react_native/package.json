@@ -1,7 +1,7 @@
 {
   "name": "flash-share",
   "main": "expo-router/entry",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "dependencies": {
     "@config-plugins/react-native-webrtc": "^15.0.2",
     "@expo/ui": "~57.0.22",
@@ -52,6 +52,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "android-bundle-arm64": "npx expo prebuild && cd android && gradlew.bat bundleRelease -PreactNativeArchitectures=arm64-v8a",
     "android-build-hotfix": "eas build --platform android --profile production && eas update --channel production --environment production --message $(git log -1 --pretty=%s)",
     "android-build-push": "eas build --platform android --profile production --auto-submit",
     "ios": "expo run:ios",
