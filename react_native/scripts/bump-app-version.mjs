@@ -10,9 +10,10 @@ const appPackage = await readFile(appPackagePath, "utf8");
 const appConfig = await readFile(appConfigPath, "utf8");
 const packageMatch = appPackage.match(/^  "version": "(\d+)\.(\d+)\.(\d+)",$/m);
 const appMatch = appConfig.match(/^    "version": "(\d+)\.(\d+)\.(\d+)",$/m);
+const versionCodeMatch = appConfig.match(/^      "versionCode": (\d+),$/m);
 
-if (!packageMatch || !appMatch) {
-  throw new Error("Could not read the Expo app versions.");
+if (!packageMatch || !appMatch || !versionCodeMatch) {
+  throw new Error("Could not read the Expo app versions or Android versionCode.");
 }
 
 const current = packageMatch.slice(1).join(".");
@@ -21,25 +22,73 @@ if (appMatch.slice(1).join(".") !== current) {
 }
 
 const next = `${packageMatch[1]}.${packageMatch[2]}.${Number(packageMatch[3]) + 1}`;
+const runtimeVersion = `${packageMatch[1]}.${packageMatch[2]}`;
+const currentVersionCode = Number(versionCodeMatch[1]);
+const nextVersionCode = currentVersionCode + 1;
+if (!Number.isSafeInteger(currentVersionCode) || !Number.isSafeInteger(nextVersionCode)) {
+  throw new Error("Android versionCode must be a safe integer.");
+}
 const nextPackage = appPackage.replace(packageMatch[0], `  "version": "${next}",`);
-const nextAppConfig = appConfig.replace(appMatch[0], `    "version": "${next}",`);
+const appRuntimePattern = /^    "runtimeVersion": "[^"]+",\r?$/m;
+const nextAppVersion = appConfig
+  .replace(appMatch[0], `    "version": "${next}",`)
+  .replace(versionCodeMatch[0], `      "versionCode": ${nextVersionCode},`);
+const nextAppConfig = appRuntimePattern.test(appConfig)
+  ? nextAppVersion.replace(appRuntimePattern, `    "runtimeVersion": "${runtimeVersion}",`)
+  : nextAppVersion.replace(
+      `    "version": "${next}",`,
+      `    "version": "${next}",\n    "runtimeVersion": "${runtimeVersion}",`,
+    );
 
-await writeFile(appPackagePath, nextPackage);
-await writeFile(appConfigPath, nextAppConfig);
+const updates = [
+  [appPackagePath, nextPackage],
+  [appConfigPath, nextAppConfig],
+];
+const tauriConfigPath = path.join(scriptDir, "..", "src-tauri", "tauri.conf.json");
+const cargoManifestPath = path.join(scriptDir, "..", "src-tauri", "Cargo.toml");
+const cargoLockPath = path.join(scriptDir, "..", "src-tauri", "Cargo.lock");
+const tauriConfig = await readFile(tauriConfigPath, "utf8");
+const cargoManifest = await readFile(cargoManifestPath, "utf8");
+const cargoLock = await readFile(cargoLockPath, "utf8");
+const cargoPackage = cargoManifest.match(/^\[package\]\r?\n[^]*?(?=^\[|(?![^]))/m)?.[0];
+const cargoName = cargoPackage?.match(/^name = "([^"]+)"\r?$/m)?.[1];
 
-const staged = spawnSync(
-  "git",
-  [
-    "add",
-    "--",
-    path.relative(path.dirname(scriptDir), appPackagePath),
-    path.relative(path.dirname(scriptDir), appConfigPath),
-  ],
-  { cwd: path.dirname(scriptDir), stdio: "inherit" },
-);
-
-if (staged.status !== 0) {
-  process.exit(staged.status ?? 1);
+if (!cargoName) {
+  throw new Error("Could not read the Tauri Cargo package name.");
 }
 
-console.log(`Expo app version bumped: ${current} -> ${next}`);
+const cargoLockPackage = cargoLock.split(/(?=^\[\[package\]\])/m).find(
+  (section) => section.match(/^name = "([^"]+)"\r?$/m)?.[1] === cargoName,
+);
+
+function replaceVersion(content, pattern, label) {
+  if (!content || !pattern.test(content)) {
+    throw new Error(`Could not read the version in ${label}.`);
+  }
+  return content.replace(pattern, `$1${next}$2`);
+}
+
+updates.push(
+  [tauriConfigPath, replaceVersion(tauriConfig, /^(  "version": ")[^"]+("[,]?\r?)$/m, "tauri.conf.json")],
+  [cargoManifestPath, cargoManifest.replace(cargoPackage, replaceVersion(cargoPackage, /^(version = ")[^"]+("\r?)$/m, "Cargo.toml"))],
+  [cargoLockPath, cargoLock.replace(cargoLockPackage, replaceVersion(cargoLockPackage, /^(version = ")[^"]+("\r?)$/m, "Cargo.lock"))],
+);
+
+for (const [filePath, content] of updates) {
+  await writeFile(filePath, content);
+}
+
+for (const [filePath] of updates) {
+  const relativePath = path.relative(path.dirname(scriptDir), filePath);
+  const staged = spawnSync(
+    "git",
+    ["add", "-f", "--", relativePath],
+    { cwd: path.dirname(scriptDir), stdio: "inherit" },
+  );
+
+  if (staged.status !== 0) {
+    process.exit(staged.status ?? 1);
+  }
+}
+
+console.log(`Expo and Tauri app versions bumped: ${current} -> ${next}`);

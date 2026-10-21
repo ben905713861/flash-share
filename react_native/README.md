@@ -59,3 +59,8 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# Local Android release signing
+
+The Android release signing config reads the same `credentials.json` structure used by EAS local credentials. Copy `credentials.example.json` to `credentials.json`, fill in the Android keystore fields, and place the keystore at the configured path. Relative keystore paths are resolved from the `react_native` directory. Both `credentials.json` and `*.jks` files are ignored by Git.
+
+Then run `npm run android-local-build`. The Expo prebuild config plugin applies the credentials to the generated Gradle release signing config.
