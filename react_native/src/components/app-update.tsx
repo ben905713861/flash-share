@@ -1,5 +1,6 @@
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import * as Updates from "expo-updates";
 import { showConfirm } from "@/components/alert-modal";
@@ -22,7 +23,13 @@ export function AppUpdate({ palette }: { palette: AppUpdatePalette }) {
 function TauriAppUpdate({ palette }: { palette: AppUpdatePalette }) {
     const [updateStatus, setUpdateStatus] = useState("");
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-    const currentVersion = Updates.runtimeVersion ?? "Unknown";
+    const [currentVersion, setCurrentVersion] = useState("Loading...");
+
+    useEffect(() => {
+        void getVersion()
+            .then(setCurrentVersion)
+            .catch(() => setCurrentVersion("Unknown"));
+    }, []);
 
     const checkForUpdates = async () => {
         if (isCheckingUpdate) return;
