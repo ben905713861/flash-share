@@ -50,6 +50,7 @@ function TauriAppUpdate({ palette }: { palette: AppUpdatePalette }) {
                 () => setUpdateStatus("Update postponed."),
             );
         } catch (error) {
+            console.error("Update failed.", error);
             setUpdateStatus(error instanceof Error ? `Update failed: ${error.message}` : "Unable to check for updates.");
         } finally {
             setIsCheckingUpdate(false);
