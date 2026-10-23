@@ -144,6 +144,7 @@ function ExpoAppUpdate({ palette }: { palette: AppUpdatePalette }) {
             <View style={[s.settingsDivider, { backgroundColor: palette.border }]} />
             <Text style={[s.settingsLabel, { color: palette.text }]}>App update</Text>
             <Text style={[s.settingsPath, { color: palette.muted }]}>Current version: {currentVersion}</Text>
+            <Text style={[s.settingsPath, { color: palette.muted }]}>Update channel: {Updates.channel ?? "Not configured"}</Text>
             <Text style={[s.settingsPath, { color: palette.muted }]}>JS update: {currentUpdate}</Text>
             <View style={s.settingsPathActions}>
                 <Pressable

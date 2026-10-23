@@ -1,6 +1,6 @@
 [package]
 name = "FlashShare"
-version = "1.0.19"
+version = "1.0.20"
 description = "Flash Share: direct text and file sharing between paired devices"
 authors = ["Ben Hu"]
 license = ""
