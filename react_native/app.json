@@ -2,7 +2,7 @@
   "expo": {
     "name": "Flash Share",
     "slug": "flash-share",
-    "version": "1.0.20",
+    "version": "1.0.21",
     "runtimeVersion": "1.0",
     "description": "Pair devices and share text or files directly, without uploading them to a central service.",
     "orientation": "portrait",
@@ -15,7 +15,7 @@
       "bundleIdentifier": "com.wuxb.flashshare"
     },
     "android": {
-      "versionCode": 21,
+      "versionCode": 22,
       "adaptiveIcon": {
         "backgroundColor": "#0B1F33",
         "foregroundImage": "./assets/images/flash-share-icon.png"
