@@ -49,9 +49,16 @@ async function collectFiles(directory) {
 }
 
 const assets = [];
+const skippedAssets = [];
 try {
   await access(bundleDir);
-  assets.push(...(await collectFiles(bundleDir)).map((filePath) => ({ filePath })));
+  for (const filePath of await collectFiles(bundleDir)) {
+    if (hasVersionInName(path.basename(filePath), version)) {
+      assets.push({ filePath });
+    } else {
+      skippedAssets.push({ filePath, reason: `filename does not match version ${version}` });
+    }
+  }
 } catch {
   console.warn(`Tauri bundle directory does not exist: ${bundleDir}`);
 }
@@ -59,22 +66,40 @@ try {
 for (const outputDir of androidOutputDirs) {
   try {
     await access(outputDir);
-    assets.push(
-      ...(await collectFiles(outputDir))
-        .filter((filePath) => [".apk", ".aab"].includes(path.extname(filePath).toLowerCase()))
-        .map((filePath) => ({
+    for (const filePath of await collectFiles(outputDir)) {
+      if (![".apk", ".aab"].includes(path.extname(filePath).toLowerCase())) continue;
+
+      const artifactVersion = await getAndroidArtifactVersion(filePath, outputDir);
+      if (artifactVersion !== version) {
+        skippedAssets.push({
           filePath,
-          uploadName: getAndroidAssetName(filePath),
-        })),
-    );
+          reason: artifactVersion
+            ? `Android version ${artifactVersion} does not match ${version}`
+            : "Android output-metadata.json version was not found",
+        });
+        continue;
+      }
+
+      assets.push({
+        filePath,
+        uploadName: getAndroidAssetName(filePath),
+      });
+    }
   } catch {
     // Android builds may produce either APKs, AABs, or both.
   }
 }
 
+if (skippedAssets.length > 0) {
+  console.log(`Skipping ${skippedAssets.length} artifact(s) that do not match version ${version}:`);
+  for (const { filePath, reason } of skippedAssets) {
+    console.log(`  ${path.relative(projectDir, filePath)} (${reason})`);
+  }
+}
+
 if (assets.length === 0) {
   throw new Error(
-    "No Tauri or Android build artifacts found. Run npm run tauri-build or an Android release build first.",
+    `No Tauri or Android build artifacts matching version ${version} found. Build the current version before uploading.`,
   );
 }
 
@@ -99,6 +124,36 @@ function getAndroidAssetName(filePath) {
     .replace(/^-/, "");
   const variantSuffix = variant ? `-${variant}` : "";
   return `Flash.Share.android_${version}${variantSuffix}${extension}`;
+}
+
+function hasVersionInName(fileName, expectedVersion) {
+  const escapedVersion = expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[_\\s-])${escapedVersion}(?=$|[_\\s.-])`).test(fileName);
+}
+
+async function getAndroidArtifactVersion(filePath, outputDir) {
+  const resolvedFilePath = path.resolve(filePath);
+  let metadataDir = path.dirname(resolvedFilePath);
+  const resolvedOutputDir = path.resolve(outputDir);
+
+  while (metadataDir === resolvedOutputDir || metadataDir.startsWith(`${resolvedOutputDir}${path.sep}`)) {
+    try {
+      const metadataPath = path.join(metadataDir, "output-metadata.json");
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      const artifact = metadata.elements?.find((element) =>
+        typeof element.outputFile === "string" &&
+        path.resolve(metadataDir, element.outputFile) === resolvedFilePath,
+      );
+      if (artifact) return artifact.versionName;
+    } catch {
+      // Metadata may be absent in a nested output directory; keep looking upward.
+    }
+
+    if (metadataDir === resolvedOutputDir) break;
+    metadataDir = path.dirname(metadataDir);
+  }
+
+  return undefined;
 }
 
 const release = runGh(["release", "view", tag], { stdio: "ignore" });
