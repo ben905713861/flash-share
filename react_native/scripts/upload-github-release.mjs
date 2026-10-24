@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -103,6 +104,14 @@ if (assets.length === 0) {
   );
 }
 
+const msiAsset = assets.find(({ filePath }) => filePath.endsWith(".msi"));
+const msiSignature = assets.find(({ filePath }) => filePath.endsWith(".msi.sig"));
+if (!msiAsset || !msiSignature) {
+  throw new Error("Windows updater metadata requires both an MSI bundle and its signature.");
+}
+
+const updaterMetadataPath = path.join(os.tmpdir(), "latest.json");
+
 function runGh(args, options = {}) {
   const result = spawnSync("gh", args, {
     cwd: projectDir,
@@ -180,4 +189,35 @@ if (gh.status !== 0) {
   process.exit(gh.status ?? 1);
 }
 
-console.log(`Uploaded ${assets.length} artifact(s) to GitHub release ${tag}.`);
+const releaseAssetsResult = runGh(["release", "view", tag, "--json", "assets"]);
+if (releaseAssetsResult.status !== 0) {
+  process.exit(releaseAssetsResult.status ?? 1);
+}
+
+const releaseAssets = JSON.parse(releaseAssetsResult.stdout.toString("utf8")).assets;
+const uploadedMsi = releaseAssets.find(({ name }) => name === path.basename(msiAsset.filePath));
+if (!uploadedMsi?.url) {
+  throw new Error(`Could not find the uploaded MSI URL for ${path.basename(msiAsset.filePath)}.`);
+}
+
+const updaterMetadata = {
+  version,
+  notes: "",
+  pub_date: new Date().toISOString(),
+  platforms: {
+    "windows-x86_64": {
+      signature: (await readFile(msiSignature.filePath, "utf8")).trim(),
+      url: uploadedMsi.url,
+    },
+  },
+};
+await writeFile(updaterMetadataPath, `${JSON.stringify(updaterMetadata, null, 2)}\n`);
+
+const updaterJson = runGh(["release", "upload", tag, updaterMetadataPath, "--clobber"], {
+  stdio: "inherit",
+});
+if (updaterJson.status !== 0) {
+  process.exit(updaterJson.status ?? 1);
+}
+
+console.log(`Uploaded ${assets.length} artifact(s) and latest.json to GitHub release ${tag}.`);
